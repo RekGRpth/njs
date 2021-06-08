@@ -10797,6 +10797,12 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("var re = /(?:ab|cd)\\d?/g; re.lastIndex=-1; re.test('@@'); re.lastIndex"),
       njs_str("0") },
 
+    { njs_str("var r = /a/; var gets = 0;"
+              "var counter = { valueOf: function() { gets++; return 0; } };"
+              "r.lastIndex = counter;"
+              "njs.dump([r.exec('nbc'), r.lastIndex === counter, gets])"),
+      njs_str("[null,true,1]") },
+
     /*
      * It seems that "/стоп/ig" fails on early PCRE versions.
      * It fails at least in 8.1 and works at least in 8.31.
@@ -10846,6 +10852,11 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("var r = (/^.+$/mg); [r.global, r.multiline, r.ignoreCase]"),
       njs_str("true,true,false") },
 
+    { njs_str("['global', 'ignoreCase', 'multiline']"
+              ".map(v => Object.getOwnPropertyDescriptor(RegExp.prototype, v))"
+              ".every(desc => (typeof desc.get === 'function' && typeof desc.set === 'undefined'))"),
+      njs_str("true") },
+
     { njs_str("var r = /./; r"),
       njs_str("/./") },
 
@@ -10855,8 +10866,8 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("var r = new RegExp('.'); r"),
       njs_str("/./") },
 
-    { njs_str("var r = new RegExp('.', 'ig'); r"),
-      njs_str("/./gi") },
+    { njs_str("var r = new RegExp('.', 'igm'); r"),
+      njs_str("/./gim") },
 
     { njs_str("var r = new RegExp('abc'); r.test('00abc11')"),
       njs_str("true") },
@@ -10922,7 +10933,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("SyntaxError: pcre_compile(\"\\\") failed: \\ at end of pattern") },
 
     { njs_str("[0].map(RegExp().toString)"),
-      njs_str("TypeError: \"this\" argument is not a regexp") },
+      njs_str("TypeError: \"this\" argument is not an object") },
 
     /* Non-standard ECMA-262 features. */
 
@@ -12986,7 +12997,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("true") },
 
     { njs_str("Object.prototype.toString.call(RegExp.prototype)"),
-      njs_str("[object RegExp]") },
+      njs_str("[object Object]") },
 
     { njs_str("RegExp.prototype"),
       njs_str("/(?:)/") },

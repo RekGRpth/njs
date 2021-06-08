@@ -11,6 +11,7 @@
 #include <ngx_event.h>
 #include <ngx_event_connect.h>
 #include "ngx_js.h"
+#include "ngx_js_fetch.h"
 
 
 typedef struct ngx_js_http_s  ngx_js_http_t;

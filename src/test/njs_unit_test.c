@@ -8635,6 +8635,9 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("/[\\"),
       njs_str("SyntaxError: Unterminated RegExp \"/[\\\" in 1") },
 
+    { njs_str("/\\s*;\\s*/"),
+      njs_str("/\\s*;\\s*/") },
+
     { njs_str("RegExp(']')"),
       njs_str("/\\]/") },
 
@@ -8802,7 +8805,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("abc") },
 
     { njs_str("''.split('').length"),
-      njs_str("1") },
+      njs_str("0") },
 
     { njs_str("'abc'.split('')"),
       njs_str("a,b,c") },
@@ -8858,8 +8861,39 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("'abc'.split(/abc/)"),
       njs_str(",") },
 
+    { njs_str("'AbcDefGhi'.split(/([A-Z][a-z]+)/)"),
+      njs_str(",Abc,,Def,,Ghi,") },
+
+    { njs_str("'myCamelCaseString'.split(/(?=[A-Z])/)"),
+      njs_str("my,Camel,Case,String") },
+
+    { njs_str("'мояВерблюжьяСтрока'.split(/(?=[А-Я])/)"),
+      njs_str("моя,Верблюжья,Строка") },
+
+    { njs_str("'Harry Trump ;Fred Barney; Helen Rigby ; Bill Abel ;Chris Hand '.split( /\\s*(?:;|$)\\s*/)"),
+      njs_str("Harry Trump,Fred Barney,Helen Rigby,Bill Abel,Chris Hand,") },
+
+    { njs_str("'Гарри Трамп ;Фрэд Барни; Хелен Ригби ; Билл Абель'.split(/\\s*;\\s*/)"),
+      njs_str("Гарри Трамп,Фрэд Барни,Хелен Ригби,Билл Абель") },
+
+    { njs_str("'Hello 1 world. Sentence number 2.'.split(/(\\d)/)"),
+      njs_str("Hello ,1, world. Sentence number ,2,.") },
+
+    { njs_str("'Привет 1 мир. Предложение номер 2.'.split(/(\\d)/)"),
+      njs_str("Привет ,1, мир. Предложение номер ,2,.") },
+
     { njs_str("'0123456789'.split('').reverse().join('')"),
       njs_str("9876543210") },
+
+    { njs_str("/-/[Symbol.split]('a-b-c')"),
+      njs_str("a,b,c") },
+
+    { njs_str("var O = RegExp.prototype[Symbol.split];"
+              "RegExp.prototype[Symbol.split] = function (s, limit) { "
+              "    return O.call(this, s, limit).map(v => `@${v}#`); "
+              "};"
+              "'2016-01-02'.split(/-/)"),
+      njs_str("@2016#,@01#,@02#") },
 
     { njs_str("'abc'.repeat(3)"),
       njs_str("abcabcabc") },
@@ -10631,6 +10665,12 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("/[A-Z/]/"),
       njs_str("/[A-Z/]/") },
 
+    { njs_str("/a/gim"),
+      njs_str("/a/gim") },
+
+    { njs_str("/a/y"),
+      njs_str("/a/y") },
+
     { njs_str("/[A-Z\n]/"),
       njs_str("SyntaxError: Unterminated RegExp \"/[A-Z\" in 1") },
 
@@ -10719,6 +10759,9 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("/α/.test('\\u00CE\\u00B1'.toBytes())"),
       njs_str("true") },
+
+    { njs_str("var r = /abc/y; r.test('abc'); r.lastIndex"),
+      njs_str("3") },
 
     { njs_str("/\\d/.exec('123')"),
       njs_str("1") },
@@ -10849,8 +10892,21 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("var r = (/^.+$/mg), s = 'ab\\nc'; [r.exec(s), r.exec(s)]"),
       njs_str("ab,c") },
 
-    { njs_str("var r = (/^.+$/mg); [r.global, r.multiline, r.ignoreCase]"),
-      njs_str("true,true,false") },
+    { njs_str("var r = (/^.+$/mg); [r.global, r.multiline, r.ignoreCase, r.sticky]"),
+      njs_str("true,true,false,false") },
+
+    { njs_str("['global', 'ignoreCase', 'multiline', 'sticky']"
+              ".map(v => Object.getOwnPropertyDescriptor(RegExp.prototype, v))"
+              ".every(desc => (typeof desc.get === 'function' && typeof desc.set === 'undefined'))"),
+      njs_str("true") },
+
+    { njs_str("var re = /./, re2 = /./y; re.lastIndex = 1; re2.lastIndex = 1;"
+              "[re.exec('abc')[0], re2.exec('abc')[0]]"),
+      njs_str("a,b") },
+
+    { njs_str("var re = /c/, re2 = /c/y;"
+              "njs.dump([re.exec('abc')[0], re2.exec('abc')])"),
+      njs_str("['c',null]") },
 
     { njs_str("['global', 'ignoreCase', 'multiline']"
               ".map(v => Object.getOwnPropertyDescriptor(RegExp.prototype, v))"
@@ -10868,6 +10924,9 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("var r = new RegExp('.', 'igm'); r"),
       njs_str("/./gim") },
+
+    { njs_str("var r = new RegExp('.', 'y'); r"),
+      njs_str("/./y") },
 
     { njs_str("var r = new RegExp('abc'); r.test('00abc11')"),
       njs_str("true") },
@@ -16981,11 +17040,13 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("var a = [1]; a[2] = 'x'; JSON.stringify(a)"),
       njs_str("[1,null,\"x\"]") },
 
+#if (!NJS_HAVE_MEMORY_SANITIZER) /* very long test under MSAN */
     { njs_str(njs_declare_sparse_array("a", 32769)
               "a[32] = 'a'; a[64] = 'b';"
               "var s = JSON.stringify(a); "
               "[s.length,s.substring(162,163),s.match(/null/g).length]"),
       njs_str("163844,a,32767") },
+#endif
 
     { njs_str(njs_declare_sparse_array("a", 8)
               "a[2] = 'a'; a[4] = 'b'; a.length = 3;"
@@ -17340,8 +17401,8 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("njs.dump({a:1, b:[1,,2,{c:new Boolean(1)}]})"),
       njs_str("{a:1,b:[1,<empty>,2,{c:[Boolean: true]}]}") },
 
-    { njs_str("njs.dump([InternalError(),TypeError('msg'), new RegExp(), /^undef$/m, new Date(0)])"),
-      njs_str("[InternalError,TypeError: msg,/(?:)/,/^undef$/m,1970-01-01T00:00:00.000Z]") },
+    { njs_str("njs.dump([InternalError(),TypeError('msg'), new RegExp(), /^undef$/my, new Date(0)])"),
+      njs_str("[InternalError,TypeError: msg,/(?:)/,/^undef$/my,1970-01-01T00:00:00.000Z]") },
 
     { njs_str("njs.dump(Array.prototype.slice.call({'1':'b', length:2}))"),
       njs_str("[<empty>,'b']") },

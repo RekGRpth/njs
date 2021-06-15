@@ -8861,6 +8861,9 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("'abc'.split(/abc/)"),
       njs_str(",") },
 
+    { njs_str("('α'.repeat(32)).split(/./).length"),
+      njs_str("33") },
+
     { njs_str("'AbcDefGhi'.split(/([A-Z][a-z]+)/)"),
       njs_str(",Abc,,Def,,Ghi,") },
 
@@ -17421,6 +17424,15 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("var a = []; a[0] = a; njs.dump(a)"),
       njs_str("[[Circular]]") },
+
+    { njs_str("var a = []; njs.dump([a,a])"),
+      njs_str("[[],[]]") },
+
+    { njs_str("var O = {}; O.x = O; njs.dump(O)"),
+      njs_str("{x:[Circular]}") },
+
+    { njs_str("var O = {}; njs.dump({x:O, y:O})"),
+      njs_str("{x:{},y:{}}") },
 
     { njs_str("var a = [], b = [a];  a[0] = b; njs.dump(a)"),
       njs_str("[[[Circular]]]") },

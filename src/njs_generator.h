@@ -10,7 +10,17 @@
 
 typedef struct njs_generator_block_s   njs_generator_block_t;
 
+
+typedef njs_int_t (*njs_generator_state_func_t)(njs_vm_t *vm,
+    njs_generator_t *generator, njs_parser_node_t *node);
+
+
 struct njs_generator_s {
+    njs_generator_state_func_t      state;
+    njs_queue_t                     stack;
+    njs_parser_node_t               *node;
+    void                            *context;
+
     njs_value_t                     *local_scope;
 
     njs_generator_block_t           *block;
@@ -26,7 +36,7 @@ struct njs_generator_s {
     /* Parsing Function() or eval(). */
     uint8_t                         runtime;           /* 1 bit */
 
-    njs_uint_t                      count;
+    njs_uint_t                      depth;
 };
 
 

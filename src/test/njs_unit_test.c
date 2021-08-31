@@ -6234,6 +6234,13 @@ static njs_unit_test_t  njs_test[] =
               "           return a.map(q=>q/2).join('|') === '3|2|1'})"),
       njs_str("true") },
 
+#ifdef NJS_TEST262
+    { njs_str("const arr = new Uint8Array([1,2,3]);"
+              "const sep = {toString(){$262.detachArrayBuffer(arr.buffer); return ','}};"
+              "arr.join(sep)"),
+      njs_str("TypeError: detached buffer") },
+#endif
+
     { njs_str("Uint8Array.prototype.reduce.call(1)"),
       njs_str("TypeError: this is not a typed array") },
 
@@ -21238,6 +21245,11 @@ static njs_unit_test_t  njs_shell_test[] =
       njs_str("TypeError: cannot convert undefined argument to object\n"
               "    at Object.keys (native)\n"
               "    at f (:1)\n"
+              "    at main (:1)\n") },
+
+    { njs_str("[].concat({}.a.a)" ENTER),
+      njs_str("TypeError: cannot get property \"a\" of undefined\n"
+              "    at Array.prototype.concat (native)\n"
               "    at main (:1)\n") },
 
     { njs_str("''.repeat(-1)" ENTER),

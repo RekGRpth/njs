@@ -21028,6 +21028,17 @@ static njs_unit_test_t  njs_shared_test[] =
       njs_str("TypeError: \"path\" must be a string or Buffer\n"
               "    at fs.readFileSync (native)\n"
               "    at main (:1)\n") },
+
+    { njs_str("var f = new Function('return 1;'); f();"),
+      njs_str("1") },
+
+    { njs_str("var sum = new Function('a', 'b', 'return a + b');"
+              "sum(2, 4);"),
+      njs_str("6") },
+
+    { njs_str("var sum = new Function('a, b', 'return a + b');"
+              "sum(2, 4);"),
+      njs_str("6") },
 };
 
 
@@ -22786,6 +22797,7 @@ njs_get_options(njs_opts_t *opts, int argc, char **argv)
         "Options:\n"
         "  -d                           print disassembled code.\n"
         "  -f PATTERN1[|PATTERN2..]     filter test suites to run.\n"
+        "  -r count                     overrides repeat count for tests.\n"
         "  -v                           verbose mode.\n";
 
     for (i = 1; i < argc; i++) {
@@ -22816,6 +22828,15 @@ njs_get_options(njs_opts_t *opts, int argc, char **argv)
             }
 
             njs_stderror("option \"-f\" requires argument\n");
+            return NJS_ERROR;
+
+        case 'r':
+            if (++i < argc) {
+                opts->repeat = atoi(argv[i]);
+                break;
+            }
+
+            njs_stderror("option \"-r\" requires argument\n");
             return NJS_ERROR;
 
         case 'v':
@@ -23022,8 +23043,9 @@ main(int argc, char **argv)
 
         op = suite->opts;
 
-        op.verbose = opts.verbose;
         op.disassemble = opts.disassemble;
+        op.repeat = opts.repeat ? opts.repeat : op.repeat;
+        op.verbose = opts.verbose;
 
         ret = suite->run(suite->tests, suite->n, &suite->name, &op, &stat);
         if (ret != NJS_OK) {

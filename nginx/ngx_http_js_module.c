@@ -50,6 +50,7 @@ typedef struct {
     ngx_log_t             *log;
     ngx_uint_t             done;
     ngx_int_t              status;
+    njs_opaque_value_t     retval;
     njs_opaque_value_t     request;
     njs_opaque_value_t     request_body;
     njs_opaque_value_t     response_body;
@@ -142,6 +143,8 @@ static njs_int_t ngx_http_js_ext_send(njs_vm_t *vm, njs_value_t *args,
     njs_uint_t nargs, njs_index_t unused);
 static njs_int_t ngx_http_js_ext_send_buffer(njs_vm_t *vm, njs_value_t *args,
     njs_uint_t nargs, njs_index_t unused);
+static njs_int_t ngx_http_js_ext_set_return_value(njs_vm_t *vm,
+    njs_value_t *args, njs_uint_t nargs, njs_index_t unused);
 static njs_int_t ngx_http_js_ext_done(njs_vm_t *vm, njs_value_t *args,
     njs_uint_t nargs, njs_index_t unused);
 static njs_int_t ngx_http_js_ext_finish(njs_vm_t *vm, njs_value_t *args,
@@ -655,6 +658,17 @@ static njs_external_t  ngx_http_js_ext_request[] = {
 
     {
         .flags = NJS_EXTERN_METHOD,
+        .name.string = njs_str("setReturnValue"),
+        .writable = 1,
+        .configurable = 1,
+        .enumerable = 1,
+        .u.method = {
+            .native = ngx_http_js_ext_set_return_value,
+        }
+    },
+
+    {
+        .flags = NJS_EXTERN_METHOD,
         .name.string = njs_str("done"),
         .writable = 1,
         .configurable = 1,
@@ -910,7 +924,6 @@ ngx_http_js_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     size_t                   len;
     u_char                  *p;
     ngx_int_t                rc;
-    njs_str_t                exception;
     njs_int_t                ret, pending;
     ngx_buf_t               *b;
     ngx_chain_t             *out, *cl;
@@ -988,11 +1001,6 @@ ngx_http_js_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                              3);
 
             if (rc == NGX_ERROR) {
-                njs_vm_retval_string(ctx->vm, &exception);
-
-                ngx_log_error(NGX_LOG_ERR, c->log, 0, "js exception: %*s",
-                              exception.length, exception.start);
-
                 return NGX_ERROR;
             }
 
@@ -1044,7 +1052,7 @@ ngx_http_js_variable_set(ngx_http_request_t *r, ngx_http_variable_value_t *v,
 
     ngx_int_t           rc;
     njs_int_t           pending;
-    njs_str_t           value;
+    ngx_str_t           value;
     ngx_http_js_ctx_t  *ctx;
 
     rc = ngx_http_js_init_vm(r);
@@ -1078,15 +1086,15 @@ ngx_http_js_variable_set(ngx_http_request_t *r, ngx_http_variable_value_t *v,
         return NGX_ERROR;
     }
 
-    if (njs_vm_retval_string(ctx->vm, &value) != NJS_OK) {
+    if (ngx_js_retval(ctx->vm, &ctx->retval, &value) != NGX_OK) {
         return NGX_ERROR;
     }
 
-    v->len = value.length;
+    v->len = value.len;
     v->valid = 1;
     v->no_cacheable = 0;
     v->not_found = 0;
-    v->data = value.start;
+    v->data = value.data;
 
     return NGX_OK;
 }
@@ -1123,7 +1131,7 @@ static ngx_int_t
 ngx_http_js_init_vm(ngx_http_request_t *r)
 {
     njs_int_t                 rc;
-    njs_str_t                 exception;
+    ngx_str_t                 exception;
     ngx_http_js_ctx_t        *ctx;
     ngx_pool_cleanup_t       *cln;
     ngx_http_js_main_conf_t  *jmcf;
@@ -1140,6 +1148,8 @@ ngx_http_js_init_vm(ngx_http_request_t *r)
         if (ctx == NULL) {
             return NGX_ERROR;
         }
+
+        njs_value_invalid_set(njs_value_arg(&ctx->retval));
 
         ngx_http_set_ctx(r, ctx, ngx_http_js_module);
     }
@@ -1164,10 +1174,10 @@ ngx_http_js_init_vm(ngx_http_request_t *r)
     cln->data = ctx;
 
     if (njs_vm_start(ctx->vm) == NJS_ERROR) {
-        njs_vm_retval_string(ctx->vm, &exception);
+        ngx_js_retval(ctx->vm, NULL, &exception);
 
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                      "js exception: %*s", exception.length, exception.start);
+                      "js exception: %V", &exception);
 
         return NGX_ERROR;
     }
@@ -2150,6 +2160,29 @@ ngx_http_js_ext_send_buffer(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     *ctx->last_out = cl;
     ctx->last_out = &cl->next;
 
+    njs_value_undefined_set(njs_vm_retval(vm));
+
+    return NJS_OK;
+}
+
+
+static njs_int_t
+ngx_http_js_ext_set_return_value(njs_vm_t *vm, njs_value_t *args,
+    njs_uint_t nargs, njs_index_t unused)
+{
+    ngx_http_js_ctx_t   *ctx;
+    ngx_http_request_t  *r;
+
+    r = njs_vm_external(vm, ngx_http_js_request_proto_id,
+                        njs_argument(args, 0));
+    if (r == NULL) {
+        njs_vm_error(vm, "\"this\" is not an external");
+        return NJS_ERROR;
+    }
+
+    ctx = ngx_http_get_module_ctx(r, ngx_http_js_module);
+
+    njs_value_assign(&ctx->retval, njs_arg(args, nargs, 1));
     njs_value_undefined_set(njs_vm_retval(vm));
 
     return NJS_OK;
@@ -3403,7 +3436,7 @@ ngx_http_js_handle_vm_event(ngx_http_request_t *r, njs_vm_event_t vm_event,
     njs_value_t *args, njs_uint_t nargs)
 {
     njs_int_t           rc;
-    njs_str_t           exception;
+    ngx_str_t           exception;
     ngx_http_js_ctx_t  *ctx;
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_js_module);
@@ -3417,10 +3450,10 @@ ngx_http_js_handle_vm_event(ngx_http_request_t *r, njs_vm_event_t vm_event,
                    (ngx_int_t) rc, vm_event);
 
     if (rc == NJS_ERROR) {
-        njs_vm_retval_string(ctx->vm, &exception);
+        ngx_js_retval(ctx->vm, NULL, &exception);
 
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                      "js exception: %*s", exception.length, exception.start);
+                      "js exception: %V", &exception);
 
         ngx_http_finalize_request(r, NGX_ERROR);
     }

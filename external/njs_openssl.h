@@ -21,7 +21,7 @@
 #include <openssl/rand.h>
 #include <openssl/crypto.h>
 
-#if EVP_PKEY_HKDF
+#ifdef EVP_PKEY_HKDF
 #include <openssl/kdf.h>
 #endif
 
@@ -43,6 +43,9 @@
 #define njs_evp_md_ctx_new()  EVP_MD_CTX_create()
 #define njs_evp_md_ctx_free(_ctx)  EVP_MD_CTX_destroy(_ctx)
 #endif
+
+
+#define njs_bio_new_mem_buf(b, len) BIO_new_mem_buf((void *) b, len)
 
 
 #if (OPENSSL_VERSION_NUMBER < 0x30000000L && !defined ERR_peek_error_data)

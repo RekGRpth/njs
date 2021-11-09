@@ -10,8 +10,6 @@
 
 static void *njs_pcre_malloc(size_t size);
 static void njs_pcre_free(void *p);
-static void *njs_pcre_default_malloc(size_t size, void *memory_data);
-static void njs_pcre_default_free(void *p, void *memory_data);
 
 
 static njs_regex_context_t  *regex_context;
@@ -22,11 +20,6 @@ njs_regex_context_create(njs_pcre_malloc_t private_malloc,
     njs_pcre_free_t private_free, void *memory_data)
 {
     njs_regex_context_t  *ctx;
-
-    if (private_malloc == NULL) {
-        private_malloc = njs_pcre_default_malloc;
-        private_free = njs_pcre_default_free;
-    }
 
     ctx = private_malloc(sizeof(njs_regex_context_t), memory_data);
 
@@ -177,20 +170,6 @@ njs_regex_is_valid(njs_regex_t *regex)
 }
 
 
-njs_uint_t
-njs_regex_ncaptures(njs_regex_t *regex)
-{
-    return regex->ncaptures;
-}
-
-
-njs_uint_t
-njs_regex_backrefs(njs_regex_t *regex)
-{
-    return regex->backrefmax;
-}
-
-
 njs_int_t
 njs_regex_named_captures(njs_regex_t *regex, njs_str_t *name, int n)
 {
@@ -260,20 +239,6 @@ static void
 njs_pcre_free(void *p)
 {
     regex_context->private_free(p, regex_context->memory_data);
-}
-
-
-static void *
-njs_pcre_default_malloc(size_t size, void *memory_data)
-{
-    return malloc(size);
-}
-
-
-static void
-njs_pcre_default_free(void *p, void *memory_data)
-{
-    free(p);
 }
 
 

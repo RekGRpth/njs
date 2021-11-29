@@ -26,7 +26,7 @@ NJS_TYPES_VER = \$(NJS_VER)
 
 NPM = npm
 
-default: $NJS_DEFAULT_TARGET
+default: njs
 
 NJS_LIB_INCS = -Isrc -I$NJS_BUILD_DIR
 
@@ -69,8 +69,6 @@ done
 
 # njs cli.
 
-if [ $NJS_HAVE_READLINE = YES ]; then
-
 cat << END >> $NJS_MAKEFILE
 
 $NJS_BUILD_DIR/njs: \\
@@ -83,21 +81,6 @@ $NJS_BUILD_DIR/njs: \\
 		-lm $NJS_LIBS $NJS_LIB_AUX_LIBS $NJS_READLINE_LIB
 
 END
-
-else
-
-cat << END >> $NJS_MAKEFILE
-
-$NJS_BUILD_DIR/njs:
-	@echo
-	@echo " error: to make njs CLI \"readline\" library is required."
-	@echo
-	@exit 1
-
-END
-
-fi
-
 
 # njs fuzzer.
 
@@ -136,7 +119,7 @@ do
 
 $NJS_BUILD_DIR/$njs_bin: $njs_src \\
 	$NJS_BUILD_DIR/libnjs.a
-	\$(NJS_CC) -o $NJS_BUILD_DIR/$njs_bin \$(NJS_CFLAGS) \\
+	\$(NJS_LINK) -o $NJS_BUILD_DIR/$njs_bin \$(NJS_CFLAGS) \\
 		\$(NJS_LIB_INCS) $njs_dep_flags \\
 		$njs_src $NJS_BUILD_DIR/libnjs.a \\
 		$njs_dep_post -lm
@@ -184,7 +167,7 @@ do
 $NJS_BUILD_DIR/$njs_bin: $njs_src \\
 	$NJS_BUILD_DIR/libnjs.a \\
 	$NJS_BUILD_DIR/$njs_externals_obj
-	\$(NJS_CC) -o $NJS_BUILD_DIR/$njs_bin \$(NJS_CFLAGS) \\
+	\$(NJS_LINK) -o $NJS_BUILD_DIR/$njs_bin \$(NJS_CFLAGS) \\
 		$NJS_LIB_AUX_CFLAGS \$(NJS_LIB_INCS) \\
 		$njs_dep_flags \\
 		$NJS_BUILD_DIR/$njs_externals_obj \\
@@ -209,7 +192,7 @@ $NJS_BUILD_DIR/njs_auto_config.h:
 	@exit 1
 
 all: $NJS_BUILD_DIR/njs_auto_config.h \\
-	$NJS_DEFAULT_TARGET ts test lib_test benchmark
+	njs ts test lib_test benchmark
 
 njs: $NJS_BUILD_DIR/njs_auto_config.h $NJS_BUILD_DIR/njs
 njs_fuzzer: $NJS_BUILD_DIR/njs_auto_config.h \\
@@ -226,12 +209,16 @@ lib_test: $NJS_BUILD_DIR/njs_auto_config.h \\
 	$NJS_BUILD_DIR/lvlhsh_unit_test
 	$NJS_BUILD_DIR/unicode_unit_test
 
+test262: njs
+
+	test/test262
+
 unit_test: $NJS_BUILD_DIR/njs_auto_config.h \\
 	$NJS_BUILD_DIR/njs_unit_test
 
 	$NJS_BUILD_DIR/njs_unit_test
 
-test: expect_test unit_test
+test: expect_test unit_test test262
 
 benchmark: $NJS_BUILD_DIR/njs_auto_config.h \\
 	$NJS_BUILD_DIR/njs_benchmark

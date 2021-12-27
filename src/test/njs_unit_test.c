@@ -19920,6 +19920,20 @@ static njs_unit_test_t  njs_buffer_module_test[] =
     { njs_str("njs.dump(Buffer.from(new String('test')))"),
       njs_str("Buffer [116,101,115,116]") },
 
+    { njs_str("Buffer.from({ get type() { throw new Error('test'); } })"),
+      njs_str("Error: test") },
+
+    { njs_str("Buffer.from({ type: 'Buffer', get data() { throw new Error('test'); } })"),
+      njs_str("Error: test") },
+
+    { njs_str("var a = [1,2,3,4]; a[1] = { valueOf() { a.length = 3; return 1; } };"
+              "njs.dump(Buffer.from(a))"),
+      njs_str("Buffer [1,1,3,0]") },
+
+    { njs_str("var a = [1,2,3,4]; a[1] = { valueOf() { a.length = 4096; a.fill(13); return 1; } };"
+              "njs.dump(Buffer.from(a))"),
+      njs_str("Buffer [1,1,13,13]") },
+
     { njs_str("["
              " ['6576696c', 'hex'],"
              " ['ZXZpbA==', 'base64'],"

@@ -339,8 +339,7 @@ njs_buffer_from_object(njs_vm_t *vm, njs_value_t *value)
     uint32_t           i;
     njs_str_t          str;
     njs_int_t          ret;
-    njs_array_t        *array;
-    njs_value_t        retval, length;
+    njs_value_t        data, retval, length;
     njs_typed_array_t  *buffer;
 
     static const njs_value_t  string_length = njs_string("length");
@@ -358,12 +357,12 @@ next:
         ret = njs_value_property(vm, value, njs_value_arg(&njs_string_type),
                                  &retval);
         if (njs_slow_path(ret != NJS_OK)) {
-            return NJS_DECLINED;
+            return ret;
         }
 
         ret = njs_value_to_string(vm, &retval, &retval);
         if (njs_slow_path(ret != NJS_OK)) {
-            return NJS_DECLINED;
+            return ret;
         }
 
         njs_string_get(&retval, &str);
@@ -375,11 +374,12 @@ next:
         ret = njs_value_property(vm, value, njs_value_arg(&njs_string_data),
                                  &retval);
         if (njs_slow_path(ret != NJS_OK)) {
-            return NJS_DECLINED;
+            return ret;
         }
 
         if (njs_is_object(&retval)) {
-            value = &retval;
+            njs_value_assign(&data, &retval);
+            value = &data;
             goto next;
         }
 
@@ -397,23 +397,6 @@ next:
     }
 
     p = njs_typed_array_buffer(buffer)->u.u8;
-
-    if (njs_is_fast_array(value)) {
-        array = njs_array(value);
-
-        for (i = 0; i < array->length; i++) {
-            ret = njs_value_to_number(vm, &array->start[i], &num);
-            if (njs_slow_path(ret != NJS_OK)) {
-                return ret;
-            }
-
-            *p++ = njs_number_to_int32(num);
-        }
-
-        njs_set_typed_array(&vm->retval, buffer);
-
-        return NJS_OK;
-    }
 
     for (i = 0; i < len; i++) {
         ret = njs_value_property_i64(vm, value, i, &retval);

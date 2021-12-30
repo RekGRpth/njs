@@ -7,8 +7,8 @@
 echo "creating $NJS_MAKEFILE"
 
 mkdir -p $NJS_BUILD_DIR/src
-mkdir -p $NJS_BUILD_DIR/build
 mkdir -p $NJS_BUILD_DIR/external
+mkdir -p $NJS_BUILD_DIR/$NJS_BUILD_DIR
 mkdir -p $NJS_BUILD_DIR/test
 
 njs_modules_c=$NJS_BUILD_DIR/njs_modules.c
@@ -242,7 +242,7 @@ lib_test: $NJS_BUILD_DIR/njs_auto_config.h \\
 
 test262: njs
 
-	test/test262
+	test/test262 --binary=$NJS_BUILD_DIR/njs
 
 unit_test: $NJS_BUILD_DIR/njs_auto_config.h \\
 	$NJS_BUILD_DIR/njs_unit_test

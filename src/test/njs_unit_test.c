@@ -4525,6 +4525,16 @@ static njs_unit_test_t  njs_test[] =
                  "Array.prototype.slice.call(1, 0, 2)"),
       njs_str(",") },
 
+    { njs_str("var a = [1, /**/, 3, 4];"
+              "Object.defineProperty(a.__proto__, 1, {"
+              "    get: () => {"
+              "        a.length = 10**6;"
+              "        return 2;"
+              "    }"
+              "});"
+              "a.slice(1)"),
+      njs_str("2,3,4") },
+
     { njs_str("Array.prototype.pop()"),
       njs_str("undefined") },
 
@@ -4872,6 +4882,18 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("[,,,3,2,1].reverse()"),
       njs_str("1,2,3,,,") },
+
+    { njs_str("var a = [,,2,1];"
+              "Object.defineProperty(a.__proto__, 0, {"
+              "    get: () => {"
+              "        a.length = 10**6;"
+              "        return 4;"
+              "    },"
+              "    set: (setval) => { Object.defineProperty(a, 0, { value: setval }); },"
+              "});"
+              "a.reverse();"
+              "a.slice(0, 4)"),
+      njs_str("1,2,,4") },
 
     { njs_str("var o = {1:true, 2:'', length:-2}; Array.prototype.reverse.call(o) === o"),
       njs_str("true") },
@@ -12823,6 +12845,17 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("var o = {}; o[Symbol.isConcatSpreadable] = true; "
               "Object.getOwnPropertyDescriptor(o, Symbol.isConcatSpreadable).value"),
       njs_str("true") },
+
+    { njs_str("var a = [1];"
+              "var b = [2, /**/, 4, 5];"
+              "Object.defineProperty(b.__proto__, 1, {"
+              "    get: () => {"
+              "        b.length = 10**6;"
+              "        return 3;"
+              "    }"
+              "});"
+              "a.concat(b)"),
+      njs_str("1,2,3,4,5") },
 
     { njs_str("var o = {}, n = 5381 /* NJS_DJB_HASH_INIT */;"
               "while(n--) o[Symbol()] = 'test'; o[''];"),

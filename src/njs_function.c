@@ -1103,13 +1103,11 @@ njs_function_constructor(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     njs_int_t               ret;
     njs_str_t               str, file;
     njs_uint_t              i;
-    njs_lexer_t             lexer;
     njs_parser_t            parser;
     njs_vm_code_t           *code;
     njs_function_t          *function;
     njs_generator_t         generator;
     njs_parser_node_t       *node;
-    njs_parser_scope_t      *scope;
     njs_function_lambda_t   *lambda;
     const njs_token_type_t  *type;
 
@@ -1172,15 +1170,11 @@ njs_function_constructor(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
 
     file = njs_str_value("runtime");
 
-    ret = njs_lexer_init(vm, &lexer, &file, str.start, str.start + str.length,
-                         1);
+    ret = njs_parser_init(vm, &parser, NULL, &file, str.start,
+                          str.start + str.length, 1);
     if (njs_slow_path(ret != NJS_OK)) {
         return ret;
     }
-
-    njs_memzero(&parser, sizeof(njs_parser_t));
-
-    parser.lexer = &lexer;
 
     ret = njs_parser(vm, &parser);
     if (njs_slow_path(ret != NJS_OK)) {
@@ -1215,20 +1209,14 @@ njs_function_constructor(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
         }
     }
 
-    scope = parser.scope;
-
-    ret = njs_variables_copy(vm, &scope->variables, vm->variables_hash);
-    if (njs_slow_path(ret != NJS_OK)) {
-        return ret;
-    }
-
     ret = njs_generator_init(&generator, 0, 1);
     if (njs_slow_path(ret != NJS_OK)) {
         njs_internal_error(vm, "njs_generator_init() failed");
         return NJS_ERROR;
     }
 
-    code = njs_generate_scope(vm, &generator, scope, &njs_entry_anonymous);
+    code = njs_generate_scope(vm, &generator, parser.scope,
+                              &njs_entry_anonymous);
     if (njs_slow_path(code == NULL)) {
         if (!njs_is_error(&vm->retval)) {
             njs_internal_error(vm, "njs_generate_scope() failed");

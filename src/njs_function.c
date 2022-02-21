@@ -811,9 +811,13 @@ njs_function_frame_save(njs_vm_t *vm, njs_frame_t *frame, u_char *pc)
     njs_native_frame_t  *active, *native;
 
     *frame = *vm->active_frame;
+
     frame->previous_active_frame = NULL;
 
     native = &frame->native;
+    native->size = 0;
+    native->free = NULL;
+    native->free_size = 0;
 
     active = &vm->active_frame->native;
     value_count = njs_function_frame_value_count(active);
@@ -1209,7 +1213,7 @@ njs_function_constructor(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
         }
     }
 
-    ret = njs_generator_init(&generator, 0, 1);
+    ret = njs_generator_init(&generator, &file, 0, 1);
     if (njs_slow_path(ret != NJS_OK)) {
         njs_internal_error(vm, "njs_generator_init() failed");
         return NJS_ERROR;

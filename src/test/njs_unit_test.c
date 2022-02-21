@@ -4253,6 +4253,11 @@ static njs_unit_test_t  njs_test[] =
               "njs.dump([a[0], a[33],a.length])"),
       njs_str("[1,1,65]") },
 
+    { njs_str("var a = [1]; a[1111111] = 2;"
+              "var a2 = [3].concat(a, [4]);"
+              "njs.dump(a2)"),
+      njs_str("[3,1,<1111110 empty items>,2,4]") },
+
     { njs_str("var re = /abc/; re[Symbol.isConcatSpreadable] = true;"
               "re[0] = 1, re[1] = 2, re[2] = 3, re.length = 3;"
               "[].concat(re)"),
@@ -13148,6 +13153,10 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("(new Function('return 5' + '** 1'.repeat(2**13)))()"),
       njs_str("5") },
+
+    { njs_str("var a = (new Function('return [' + ','.repeat(2**16) + ']'))();"
+			  "njs.dump(a)"),
+      njs_str("[<65536 empty items>]") },
 
     { njs_str("(new Function('var a = 7; return a' + '= a'.repeat(2**13)))()"),
       njs_str("7") },

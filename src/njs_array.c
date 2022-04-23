@@ -1284,6 +1284,11 @@ njs_array_prototype_splice(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
                 if (njs_slow_path(ret == NJS_ERROR)) {
                     return ret;
                 }
+
+            } else {
+                if (deleted->object.fast_array) {
+                    njs_set_invalid(&deleted->start[i]);
+                }
             }
         }
 
@@ -2696,7 +2701,7 @@ slow_path:
         goto exception;
     }
 
-    if (njs_fast_path(fast_path)) {
+    if (njs_fast_path(fast_path && njs_is_fast_array(this))) {
         array = njs_array(this);
         start = array->start;
 

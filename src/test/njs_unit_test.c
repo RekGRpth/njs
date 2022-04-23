@@ -4869,6 +4869,15 @@ static njs_unit_test_t  njs_test[] =
               "Array.prototype.splice.call(obj, 2**53-2, 0, 'C');"),
       njs_str("TypeError: Invalid length") },
 
+    { njs_str("var a = {1: 'B', length: 2};"
+              "Array.prototype.splice.call(a, 0)"),
+      njs_str(",B") },
+
+    { njs_str("var a = new Uint8Array();"
+              "a.__proto__ = [1,2,3];"
+              "a.splice(0)"),
+      njs_str(",,") },
+
     { njs_str("var a = []; a.reverse()"),
       njs_str("") },
 
@@ -6988,6 +6997,9 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("[1,2].sort(1)"),
       njs_str("TypeError: comparefn must be callable or undefined") },
+
+    { njs_str("var a = [1,2]; a.sort(() => {a.length = 65535}); a.length"),
+      njs_str("65535") },
 
     /*
       Array.prototype.keys()

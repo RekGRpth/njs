@@ -5409,6 +5409,9 @@ static njs_unit_test_t  njs_test[] =
                  "Array.prototype.fill.call(o, 2).a"),
       njs_str("4") },
 
+    { njs_str("Array.prototype.fill.call(new Int32Array(1))"),
+      njs_str("0") },
+
     { njs_str("ArrayBuffer()"),
       njs_str("TypeError: Constructor ArrayBuffer requires 'new'") },
 
@@ -13836,6 +13839,16 @@ static njs_unit_test_t  njs_test[] =
               "var d = Object.getOwnPropertyDescriptor(o, 'a');"
               "d.enumerable && d.writable && d.configurable"),
       njs_str("true") },
+
+    { njs_str("const arr = [1,2];"
+              "function f(arg) {"
+              "        const desc = {get: arg};"
+              "        Object.defineProperty(desc, 'set', desc);"
+              "        Object.defineProperty(arr, 1, desc);"
+              "}"
+              "f(f);"
+              "njs.dump(arr)"),
+      njs_str("[1,'[Getter]']") },
 
     { njs_str("Object.defineProperties()"),
       njs_str("TypeError: Object.defineProperties is called on non-object") },

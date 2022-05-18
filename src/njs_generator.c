@@ -427,6 +427,16 @@ static njs_int_t njs_generate_index_release(njs_vm_t *vm,
                           ##__VA_ARGS__)
 
 
+#ifdef NJS_GENERATOR_DEBUG
+#define njs_generator_debug(msg, ...) njs_printf(msg "\n", ##__VA_ARGS__)
+#define njs_generator_debug_code(code)                                        \
+        njs_disassemble((u_char *) code, NULL, 1, NULL)
+#else
+#define njs_generator_debug(msg, ...)
+#define njs_generator_debug_code(code)
+#endif
+
+
 static const njs_str_t  no_label     = njs_str("");
 static const njs_str_t  return_label = njs_str("@return");
 /* GCC and Clang complain about NULL argument passed to memcmp(). */
@@ -725,7 +735,6 @@ njs_generate(njs_vm_t *vm, njs_generator_t *generator, njs_parser_node_t *node)
         return njs_generate_await(vm, generator, node);
 
     default:
-        njs_thread_log_debug("unknown token: %d", node->token);
         njs_internal_error(vm, "Generator failed: unknown token");
 
         return NJS_ERROR;
@@ -3368,8 +3377,7 @@ njs_generate_3addr_operation_end(njs_vm_t *vm, njs_generator_t *generator,
 
     code->dst = node->index;
 
-    njs_thread_log_debug("CODE3  %p, %p, %p",
-                         code->dst, code->src1, code->src2);
+    njs_generator_debug_code(code);
 
     return njs_generator_stack_pop(vm, generator, generator->context);
 }
@@ -3404,7 +3412,7 @@ njs_generate_2addr_operation_end(njs_vm_t *vm, njs_generator_t *generator,
 
     code->dst = node->index;
 
-    njs_thread_log_debug("CODE2  %p, %p", code->dst, code->src);
+    njs_generator_debug_code(code);
 
     return njs_generator_stack_pop(vm, generator, NULL);
 }
@@ -3453,7 +3461,7 @@ njs_generate_typeof_operation_end(njs_vm_t *vm, njs_generator_t *generator,
 
     code->dst = node->index;
 
-    njs_thread_log_debug("CODE2  %p, %p", code->dst, code->src);
+    njs_generator_debug_code(code);
 
     return njs_generator_stack_pop(vm, generator, NULL);
 }
@@ -3690,7 +3698,6 @@ njs_generate_function_scope(njs_vm_t *vm, njs_generator_t *prev,
     lambda->closures = generator.closures->start;
     lambda->nclosures = generator.closures->items;
     lambda->nlocal = node->scope->items;
-    lambda->temp = node->scope->temp;
 
     arr = node->scope->declarations;
     lambda->declarations = (arr != NULL) ? arr->start : NULL;
@@ -4898,7 +4905,7 @@ njs_generate_temp_index_get(njs_vm_t *vm, njs_generator_t *generator,
     if (cache != NULL && cache->items != 0) {
         last = njs_arr_remove_last(cache);
 
-        njs_thread_log_debug("CACHE %p", *last);
+        njs_generator_debug("INDEX REUSE  %04Xz", (size_t) *last);
 
         return *last;
     }
@@ -4908,7 +4915,7 @@ njs_generate_temp_index_get(njs_vm_t *vm, njs_generator_t *generator,
         return NJS_ERROR;
     }
 
-    return njs_scope_index(scope->type, scope->temp++, NJS_LEVEL_TEMP,
+    return njs_scope_index(scope->type, scope->items++, NJS_LEVEL_LOCAL,
                            NJS_VARIABLE_VAR);
 }
 
@@ -4964,7 +4971,7 @@ njs_generate_index_release(njs_vm_t *vm, njs_generator_t *generator,
     njs_arr_t    *cache;
     njs_index_t  *last;
 
-    njs_thread_log_debug("RELEASE %p", index);
+    njs_generator_debug("INDEX RELEASE %04Xz", (size_t) index);
 
     cache = generator->index_cache;
 

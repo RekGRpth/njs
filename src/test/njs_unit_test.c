@@ -7174,6 +7174,10 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("`\\${a}bc"),
       njs_str("SyntaxError: Unterminated template literal in 1") },
 
+    { njs_str("var v = undefined; var u8 = 'α';"
+              "[`undefined${u8}`.length, `undefineQ${u8}`.length]"),
+      njs_str("10,10") },
+
     { njs_str("`text1\ntext2`;"),
       njs_str("text1\ntext2") },
 
@@ -11294,6 +11298,14 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("let e = AggregateError([1, 2, 3], 'm'); e"),
       njs_str("AggregateError: m") },
+
+    { njs_str("var v = Object.defineProperty([], 1025, {get: () => 1});"
+              "AggregateError(v).errors[23]"),
+      njs_str("undefined") },
+
+    { njs_str("var v = Object.defineProperty([], 2**20, {get: () => 1});"
+              "AggregateError(v).errors[2**19]"),
+      njs_str("undefined") },
 
     /* Memory object is immutable. */
 

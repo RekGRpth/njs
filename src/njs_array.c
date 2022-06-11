@@ -165,7 +165,7 @@ njs_array_convert_to_slow_array(njs_vm_t *vm, njs_array_t *array)
 
     /* GC: release value. */
 
-    njs_mp_free(vm->mem_pool, array->start);
+    njs_mp_free(vm->mem_pool, array->data);
     array->start = NULL;
 
     return NJS_OK;
@@ -408,7 +408,9 @@ njs_array_expand(njs_vm_t *vm, njs_array_t *array, uint32_t prepend,
 
     array->start = start;
 
-    njs_mp_free(vm->mem_pool, old);
+    if (old != NULL) {
+        njs_mp_free(vm->mem_pool, old);
+    }
 
     return NJS_OK;
 

@@ -250,6 +250,12 @@ typedef struct {
     uint8_t                         unsafe;          /* 1 bit */
     uint8_t                         module;          /* 1 bit */
     uint8_t                         ast;             /* 1 bit */
+#ifdef NJS_DEBUG_OPCODE
+    uint8_t                         opcode_debug;    /* 1 bit */
+#endif
+#ifdef NJS_DEBUG_GENERATOR
+    uint8_t                         generator_debug; /* 1 bit */
+#endif
     uint8_t                         unhandled_rejection;
 } njs_vm_opt_t;
 

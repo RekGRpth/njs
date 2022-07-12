@@ -7457,6 +7457,66 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("'r' !== '\\r'"),
       njs_str("true") },
 
+    /* Octal escape sequences are not allowed in strict mode.*/
+
+    { njs_str("'\\0a'"),
+      njs_str("\0a") },
+
+    { njs_str("'\\1a'"),
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+
+    { njs_str("'a\\2a'"),
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+
+    { njs_str("'\\3a'"),
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+
+    { njs_str("'a\\4a'"),
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+
+    { njs_str("'\\5a'"),
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+
+    { njs_str("'a\\6a'"),
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+
+    { njs_str("'\\7a'"),
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+
+    { njs_str("'\\8a'"),
+      njs_str("SyntaxError: The escapes \\8 and \\9 can't be used in untagged template literals or in strict mode code in 1") },
+
+    { njs_str("'\\9a'"),
+      njs_str("SyntaxError: The escapes \\8 and \\9 can't be used in untagged template literals or in strict mode code in 1") },
+
+    { njs_str("'\\aa'"),
+      njs_str("aa") },
+
+    { njs_str("'\\*a'"),
+      njs_str("*a") },
+
+    { njs_str("`\\7`"),
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+
+    { njs_str("`\\9`"),
+      njs_str("SyntaxError: The escapes \\8 and \\9 can't be used in untagged template literals or in strict mode code in 1") },
+
+    /* Octal escape sequences are allowed in tagged template literals in strict mode.*/
+
+#if 0  /* FIXME: tag function runtime semantics */
+    { njs_str("function x (s) {return s[0]}; x`\\7`"),
+      njs_str("undefined") },
+
+    { njs_str("function x (s) {return s[0]}; x`\\9`"),
+      njs_str("undefined") },
+
+    { njs_str("function x (s) {return s.raw[0]}; x`\\9`"),
+      njs_str("\\9") },
+
+    { njs_str("function x (s) {return s.raw[0]}; x`\\7`"),
+      njs_str("\\7") },
+#endif
+
     /* Broken UTF-8 literals.*/
 
     { njs_str("'\\a\x96\xE5\x9C\xE3\x81\xB6'"),
@@ -9377,6 +9437,70 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("[encodeURI, encodeURIComponent, decodeURI, decodeURIComponent]"
               ".every(v=>{var r = v(); return (typeof r === 'string') && r === 'undefined';})"),
+      njs_str("true")},
+
+    /* btoa() */
+
+    { njs_str("["
+              " undefined,"
+              " '',"
+              " '\\x00',"
+              " '\\x00\\x01',"
+              " '\\x00\\x01\\x02',"
+              " '\\x00\\xfe\\xff',"
+              " String.fromCodePoint(0x100),"
+              " String.fromCodePoint(0x00, 0x100),"
+              " String.fromCodePoint(0x00, 0x01, 0x100),"
+              " String.bytesFrom([0x80]),"
+              " String.bytesFrom([0x60, 0x80]),"
+              " String.bytesFrom([0x60, 0x60, 0x80]),"
+              "].map(v => { try { return btoa(v); } catch (e) { return '#'} })"),
+      njs_str("dW5kZWZpbmVk,,AA==,AAE=,AAEC,AP7/,#,#,#,#,#,#")},
+
+    /* atob() */
+
+    { njs_str("function c(s) {"
+              "    let cp = [];"
+              "    for (var i = 0; i < s.length; i++) {"
+              "        cp.push(s.codePointAt(i));"
+              "    }"
+              "    return cp;"
+              "};"
+              ""
+              "["
+              " undefined,"
+              " '',"
+              " '=',"
+              " '==',"
+              " '===',"
+              " '====',"
+              " 'AA@',"
+              " '@',"
+              " 'A==A',"
+              " btoa(String.fromCharCode.apply(null, [1])),"
+              " btoa(String.fromCharCode.apply(null, [1, 2])),"
+              " btoa(String.fromCharCode.apply(null, [1, 2, 255])),"
+              " btoa(String.fromCharCode.apply(null, [255, 1, 2, 3])),"
+              "].map(v => { try { return njs.dump(c(atob(v))); } catch (e) { return '#'} })"),
+      njs_str("#,[],#,#,#,#,#,#,#,[1],[1,2],[1,2,255],[255,1,2,3]")},
+
+    { njs_str("function c(s) {"
+              "    let cp = [];"
+              "    for (var i = 0; i < s.length; i++) {"
+              "        cp.push(s.codePointAt(i));"
+              "    }"
+              "    return cp;"
+              "};"
+              ""
+              "["
+              " 'CDRW',"
+              " ' CDRW',"
+              " 'C DRW',"
+              " 'CD RW',"
+              " 'CDR W',"
+              " 'CDRW    ',"
+              " ' C D R W ',"
+              "].every(v => c(atob(v)).toString() == '8,52,86')"),
       njs_str("true")},
 
     /* Functions. */

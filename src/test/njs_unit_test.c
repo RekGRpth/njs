@@ -3462,7 +3462,7 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("function f() { Object.prototype.toString = 1; };"
               "Object.prototype.toString = f;"
               "(function () { try { 's'[{}](); } catch (e) { throw e; } })()"),
-      njs_str("TypeError: Cannot convert object to primitive value") },
+      njs_str("TypeError: (intermediate value)[\"undefined\"] is not a function") },
 
     { njs_str("var i; for (i = 0; i < 10; i++) { i += 1 } i"),
       njs_str("10") },
@@ -3651,7 +3651,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("TypeError: cannot get property \"b\" of undefined") },
 
     { njs_str("var a = null; a.b++; a.b"),
-      njs_str("TypeError: cannot get property \"b\" of undefined") },
+      njs_str("TypeError: cannot get property \"b\" of null") },
 
     { njs_str("var a = true; a.b++; a.b"),
       njs_str("TypeError: property set on primitive boolean type") },
@@ -4408,6 +4408,23 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("var n = { toString: function() { return '1.5' } };"
                  "var a = [1,2]; a[1.5] = 5; '' + (n in a) + (delete a[n])"),
       njs_str("truetrue") },
+
+    { njs_str("var o = {},  v = o;"
+              "v[{toString: () => { v = 'V'; return 'a';}}] = 1;"
+              "[v, o.a]"),
+      njs_str("V,1") },
+
+    { njs_str("var o = null; o[{toString:()=>{throw 'OOps'}}]"),
+      njs_str("TypeError: cannot get property \"[object Object]\" of null") },
+
+    { njs_str("var o = null; o[{toString:()=>{throw 'OOps'}}]()"),
+      njs_str("TypeError: cannot get property \"[object Object]\" of null") },
+
+    { njs_str("var o = null; o[{toString:()=>{throw 'OOps'}}] = 1"),
+      njs_str("TypeError: cannot set property \"[object Object]\" of null") },
+
+    { njs_str("var o = null; o[{toString:()=>{throw 'OOps'}}] += 1"),
+      njs_str("TypeError: cannot get property \"[object Object]\" of null") },
 
     /**/
 
@@ -7340,6 +7357,11 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("var a = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\xF3'; "
                  "[a.length, a[33], a[34]]"),
       njs_str("35,a,�") },
+
+    /* Spaces: U+0009U+000BU+000CU+0020U+00A0U+000AU+000DU+2028U+2029 */
+
+    { njs_str("\x09\x0a\x0b\x0c\x0d \xc2\xa0'a'\xe2\x80\xa8+\xe2\x80\xa9'b'"),
+      njs_str("ab") },
 
     /* Escape strings. */
 
@@ -12262,7 +12284,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("TypeError: Cyclic __proto__ value") },
 
     { njs_str("Object.prototype.__proto__.f()"),
-      njs_str("TypeError: cannot get property \"f\" of undefined") },
+      njs_str("TypeError: cannot get property \"f\" of null") },
 
     { njs_str("var obj = Object.create(null); obj.one = 1;"
                  "var res = [];"

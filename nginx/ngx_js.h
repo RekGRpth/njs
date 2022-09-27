@@ -22,6 +22,10 @@
 #define NGX_JS_BOOLEAN      8
 #define NGX_JS_NUMBER       16
 
+#define NGX_JS_BOOL_FALSE   0
+#define NGX_JS_BOOL_TRUE    1
+#define NGX_JS_BOOL_UNSET   2
+
 #define ngx_js_buffer_type(btype) ((btype) & ~NGX_JS_DEPRECATED)
 
 
@@ -46,13 +50,34 @@ typedef struct {
 } ngx_js_named_path_t;
 
 
-#define NGX_JS_COMMON_CONF                                                    \
+#define _NGX_JS_COMMON_CONF                                                   \
     njs_vm_t              *vm;                                                \
     ngx_array_t           *imports;                                           \
     ngx_array_t           *paths;                                             \
                                                                               \
     njs_vm_t              *preload_vm;                                        \
-    ngx_array_t           *preload_objects                                    \
+    ngx_array_t           *preload_objects;                                   \
+                                                                              \
+    size_t                 buffer_size;                                       \
+    size_t                 max_response_body_size;                            \
+    ngx_msec_t             timeout
+
+
+#if defined(NGX_HTTP_SSL) || defined(NGX_STREAM_SSL)
+#define NGX_JS_COMMON_CONF                                                    \
+    _NGX_JS_COMMON_CONF;                                                      \
+                                                                              \
+    ngx_ssl_t             *ssl;                                               \
+    ngx_str_t              ssl_ciphers;                                       \
+    ngx_uint_t             ssl_protocols;                                     \
+    ngx_flag_t             ssl_verify;                                        \
+    ngx_int_t              ssl_verify_depth;                                  \
+    ngx_str_t              ssl_trusted_certificate
+
+#else
+#define NGX_JS_COMMON_CONF _NGX_JS_COMMON_CONF
+#endif
+
 
 typedef struct {
     NGX_JS_COMMON_CONF;
@@ -98,6 +123,15 @@ void ngx_js_logger(njs_vm_t *vm, njs_external_ptr_t external,
 char * ngx_js_import(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 char * ngx_js_preload_object(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 ngx_int_t ngx_js_init_preload_vm(ngx_conf_t *cf, ngx_js_conf_t *conf);
+ngx_int_t ngx_js_merge_vm(ngx_conf_t *cf, ngx_js_conf_t *conf,
+    ngx_js_conf_t *prev,
+    ngx_int_t (*init_vm)(ngx_conf_t *cf, ngx_js_conf_t *conf));
+ngx_int_t ngx_js_init_conf_vm(ngx_conf_t *cf, ngx_js_conf_t *conf,
+    njs_vm_opt_t *options,
+    ngx_int_t (*externals_init)(ngx_conf_t *cf, ngx_js_conf_t *conf));
+ngx_js_conf_t *ngx_js_create_conf(ngx_conf_t *cf, size_t size);
+char * ngx_js_merge_conf(ngx_conf_t *cf, void *parent, void *child,
+   ngx_int_t (*init_vm)(ngx_conf_t *cf, ngx_js_conf_t *conf));
 
 njs_int_t ngx_js_ext_string(njs_vm_t *vm, njs_object_prop_t *prop,
     njs_value_t *value, njs_value_t *setval, njs_value_t *retval);

@@ -5549,6 +5549,15 @@ static njs_unit_test_t  njs_test[] =
                  "Array.prototype.fill.call(o, 2).a"),
       njs_str("4") },
 
+    { njs_str("var a = (new Array(2**10)).fill(0);"
+              "var start = {valueOf() {"
+              "                 var len = a.length - 2;"
+              "                 for (var i = 0; i < len; i++) { a.shift(); }; "
+              "                 return 0;"
+              "            }};"
+              "a.fill('xxx', start)"),
+      njs_str("xxx,xxx") },
+
     { njs_str("Array.prototype.fill.call(new Int32Array(1))"),
       njs_str("0") },
 
@@ -6574,6 +6583,15 @@ static njs_unit_test_t  njs_test[] =
     { njs_str(NJS_TYPED_ARRAY_LIST
               ".every(v=>{var a = (new v([255,255,3,3,2,1])).slice(2); a.sort(); "
               "           return a.toString() === '1,2,3,3'})"),
+      njs_str("true") },
+
+    { njs_str(NJS_TYPED_ARRAY_LIST
+              ".every(v=>{ var a = [];"
+              "            var b = {toString() {a.length = 65535; return 99;}};"
+              "            for (var c = 0; c < 3; c++) { a[c] = b; }"
+              "            var ta = new v(6); ta.set(a);"
+              "            return ta.toString() == '99,99,99,0,0,0';"
+              "          })"),
       njs_str("true") },
 
     { njs_str("(new Float32Array([255,255,NaN,3,NaN,Infinity,3,-Infinity,0,-0,2,1,-5])).slice(2).sort()"),
@@ -8936,6 +8954,35 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("String.bytesFrom([255,149,15,97,95]).replace(/_/g, 'X')[4]"),
       njs_str("X") },
+
+    { njs_str("var a = [];"
+              "a[2] = '';"
+              "var re = /any_regexp/;"
+              "re.exec = function () {"
+              "    return a;"
+              "};"
+              "var r = 'any_string'.replace(re);"),
+      njs_str("undefined") },
+
+    { njs_str("var a = [];"
+              "a[2] = {toString() {a[2**20] = 1; return 'X';}}; "
+              "a[4] = 'Y';"
+              "a[99] = 'Z';"
+              "a[100] = '*';"
+              "a[200] = '!';"
+              "var re = /b/;"
+              "re.exec = () => a;"
+              "'abc'.replace(re, '@$1|$2|$3|$4|$99|$100|@')"),
+      njs_str("@|X||Y|Z|0|@") },
+
+    { njs_str("var a = [];"
+              "Object.defineProperty(a, 32768, {});"
+              "var re = /any_regexp/;"
+              "re.exec = function () {"
+              "    return a;"
+              "};"
+              "var r = 'any_string'.replace(re);"),
+      njs_str("undefined") },
 
     { njs_str("/=/"),
       njs_str("/=/") },

@@ -519,7 +519,7 @@ njs_value_is_buffer(const njs_value_t *value)
  *     in NJS_PROPERTY_QUERY_GET
  *       prop->type is NJS_PROPERTY or NJS_PROPERTY_HANDLER.
  *     in NJS_PROPERTY_QUERY_SET, NJS_PROPERTY_QUERY_DELETE
- *       prop->type is NJS_PROPERTY, NJS_PROPERTY_REF,
+ *       prop->type is NJS_PROPERTY, NJS_PROPERTY_REF, NJS_PROPERTY_PLACE_REF,
  *       NJS_PROPERTY_TYPED_ARRAY_REF or
  *       NJS_PROPERTY_HANDLER.
  *   NJS_DECLINED         property was not found in object,
@@ -737,8 +737,11 @@ njs_array_property_query(njs_vm_t *vm, njs_property_query_t *pq,
     int64_t            length;
     uint64_t           size;
     njs_int_t          ret;
+    njs_bool_t         resized;
     njs_value_t        *setval, value;
     njs_object_prop_t  *prop;
+
+    resized = 0;
 
     if (pq->query == NJS_PROPERTY_QUERY_SET) {
         if (!array->object.extensible) {
@@ -764,6 +767,7 @@ njs_array_property_query(njs_vm_t *vm, njs_property_query_t *pq,
                     }
 
                     array->length = index + 1;
+                    resized = 1;
                 }
 
                 goto prop;
@@ -829,7 +833,7 @@ prop:
 
     } else {
         njs_prop_ref(prop) = &array->start[index];
-        prop->type = NJS_PROPERTY_REF;
+        prop->type = resized ? NJS_PROPERTY_PLACE_REF : NJS_PROPERTY_REF;
     }
 
     njs_set_number(&prop->name, index);
@@ -1229,6 +1233,7 @@ slow_path:
                 goto found;
 
             case NJS_PROPERTY_REF:
+            case NJS_PROPERTY_PLACE_REF:
                 njs_value_assign(njs_prop_ref(prop), setval);
                 return NJS_OK;
 
@@ -1324,19 +1329,40 @@ njs_int_t
 njs_value_property_delete(njs_vm_t *vm, njs_value_t *value, njs_value_t *key,
     njs_value_t *removed, njs_bool_t thrw)
 {
+    double                num;
+    uint32_t              index;
     njs_int_t             ret;
-    njs_value_t           primitive;
+    njs_array_t           *array;
     njs_object_prop_t     *prop;
     njs_property_query_t  pq;
 
-    if (njs_slow_path(!njs_is_key(key))) {
-        ret = njs_value_to_key(vm, &primitive, key);
-        if (njs_slow_path(ret != NJS_OK)) {
-            return NJS_ERROR;
+    njs_assert(njs_is_index_or_key(key));
+
+    if (njs_fast_path(njs_is_number(key))) {
+        if (njs_slow_path(!(njs_is_fast_array(value)))) {
+            goto slow_path;
         }
 
-        key = &primitive;
+        num = njs_number(key);
+
+        if (njs_slow_path(!njs_number_is_integer_index(num))) {
+            goto slow_path;
+        }
+
+        index = (uint32_t) num;
+
+        array = njs_array(value);
+
+        if (njs_slow_path(index >= array->length)) {
+            goto slow_path;
+        }
+
+        njs_value_assign(&array->start[index], &njs_value_invalid);
+
+        return NJS_OK;
     }
+
+slow_path:
 
     njs_property_query_init(&pq, NJS_PROPERTY_QUERY_DELETE, 0, 1);
 
@@ -1385,6 +1411,7 @@ njs_value_property_delete(njs_vm_t *vm, njs_value_t *value, njs_value_t *key,
         return njs_function_apply(vm, njs_prop_getter(prop), value, 1, removed);
 
     case NJS_PROPERTY_REF:
+    case NJS_PROPERTY_PLACE_REF:
         if (removed != NULL) {
             njs_value_assign(removed, njs_prop_ref(prop));
         }

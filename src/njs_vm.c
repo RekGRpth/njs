@@ -663,6 +663,13 @@ njs_vm_memory_pool(njs_vm_t *vm)
 }
 
 
+njs_external_ptr_t
+njs_vm_external_ptr(njs_vm_t *vm)
+{
+    return vm->external;
+}
+
+
 uintptr_t
 njs_vm_meta(njs_vm_t *vm, njs_uint_t index)
 {
@@ -1297,6 +1304,13 @@ njs_vm_value_to_bytes(njs_vm_t *vm, njs_str_t *dst, njs_value_t *src)
     }
 
     return ret;
+}
+
+
+njs_int_t
+njs_vm_string_compare(const njs_value_t *v1, const njs_value_t *v2)
+{
+    return njs_string_cmp(v1, v2);
 }
 
 

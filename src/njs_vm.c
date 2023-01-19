@@ -239,6 +239,13 @@ njs_vm_compile(njs_vm_t *vm, u_char **start, u_char *end)
 
 
 njs_mod_t *
+njs_vm_add_module(njs_vm_t *vm, njs_str_t *name, njs_value_t *value)
+{
+    return njs_module_add(vm, name, value);
+}
+
+
+njs_mod_t *
 njs_vm_compile_module(njs_vm_t *vm, njs_str_t *name, u_char **start,
     u_char *end)
 {
@@ -256,7 +263,7 @@ njs_vm_compile_module(njs_vm_t *vm, njs_str_t *name, u_char **start,
         return module;
     }
 
-    module = njs_module_add(vm, name);
+    module = njs_module_add(vm, name, NULL);
     if (njs_slow_path(module == NULL)) {
         return NULL;
     }
@@ -899,7 +906,7 @@ njs_vm_logger(njs_vm_t *vm, njs_log_level_t level, const char *fmt, ...)
     u_char        *p;
     va_list       args;
     njs_logger_t  logger;
-    u_char        buf[NJS_MAX_ERROR_STR];
+    u_char        buf[32768];
 
     if (vm->options.ops == NULL) {
         return;

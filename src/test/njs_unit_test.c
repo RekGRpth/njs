@@ -8984,9 +8984,6 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("'abc'.replace(/b/g, '$0')"),
       njs_str("a$0c") },
 
-    { njs_str("typeof String.bytesFrom(Array(15).fill(0xE3)).replace(/^/g, 1)"),
-      njs_str("string") },
-
     { njs_str("'abc'.replace(/^/g, '|$&|')"),
       njs_str("||abc") },
 
@@ -9059,12 +9056,6 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("var m; var r = /./; r.exec = function() { return []; };"
               "r[Symbol.replace]('foo', function() {m = arguments[0]}); [m, typeof m]"),
       njs_str("undefined,string") },
-
-    { njs_str("String.bytesFrom([253,242,141,10]).replace(/\\s/g, 'X')[3]"),
-      njs_str("X") },
-
-    { njs_str("String.bytesFrom([255,149,15,97,95]).replace(/_/g, 'X')[4]"),
-      njs_str("X") },
 
     { njs_str("var a = [];"
               "a[2] = '';"
@@ -9270,9 +9261,6 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("var a = '\\u00CE\\u00B1'.toBytes().match(/α/g)[0] + 'α';"
                  "a +' '+ a.length"),
       njs_str("αα 4") },
-
-    { njs_str("typeof String.bytesFrom(Array(15).fill(0xE3)).match(/^/g)"),
-      njs_str("object") },
 
     { njs_str("'abc'.split()"),
       njs_str("abc") },
@@ -18082,9 +18070,6 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("JSON.stringify('\\u00CE\\u00B1\\u00C2\\u00B6'.toBytes())"),
       njs_str("\"α¶\"") },
 
-    { njs_str("JSON.stringify('µ§±®'.toBytes())"),
-      njs_str("\"\xB5\xA7\xB1\xAE\"") },
-
     /* Optional arguments. */
 
     { njs_str("JSON.stringify(undefined, undefined, 1)"),
@@ -21481,6 +21466,88 @@ static njs_unit_test_t  njs_webcrypto_test[] =
 };
 
 
+static njs_unit_test_t  njs_xml_test[] =
+{
+    { njs_str("const xml = require('xml');"
+              "let doc = xml.parse(`<note><to b=\"bar\" a= \"foo\" >Tove</to><from>Jani</from></note>`);"
+              "[doc.note.$name,"
+              " doc.note.to.$text,"
+              " doc.note.$parent,"
+              " doc.note.to.$parent.$name,"
+              " doc.note.$tag$to.$text,"
+              " doc.note.to.$attr$b,"
+              " doc.note.$tags[1].$text,"
+              " doc.note.$tags$from[0].$text]"),
+      njs_str("note,Tove,,note,Tove,bar,Jani,Jani") },
+
+    { njs_str("const xml = require('xml');"
+              "let doc = xml.parse(`<root><foo>FOO</foo><foo>BAR</foo></root>`);"
+              "[doc.root.$tags$foo[0].$text,"
+              " doc.root.$tags$foo[1].$text,"
+              " doc.root.$tags$bar.length,"
+              " doc.root.$tags$.length]"),
+      njs_str("FOO,BAR,0,2") },
+
+    { njs_str("const xml = require('xml');"
+              "let doc = xml.parse(`<r><a></a>TEXT</r>`);"
+              "doc.r.$text"),
+      njs_str("TEXT") },
+
+    { njs_str("const xml = require('xml');"
+              "let doc = xml.parse(`<r>俄语<a></a>данные</r>`);"
+              "doc.r.$text[2]"),
+      njs_str("д") },
+
+    { njs_str("const xml = require('xml');"
+              "let doc = xml.parse(`<俄语 լեզու=\"ռուսերեն\">данные</俄语>`);"
+              "[doc['俄语'].$name[1],"
+              " doc['俄语']['$attr$լեզու'][7],"
+              " doc['俄语'].$text[5]]"),
+      njs_str("语,ն,е") },
+
+    { njs_str("const xml = require('xml');"
+              "var doc = xml.parse(`<n0:pdu xmlns:n0=\"http://a\"><n1:elem1 xmlns:n1=\"http://b\">"
+                                   "<!-- comment -->foo</n1:elem1></n0:pdu>`);"
+              "[xml.c14n(doc.pdu.elem1),"
+              " xml.exclusiveC14n(doc.pdu.elem1),"
+              " xml.exclusiveC14n(doc.pdu.elem1, null, 1),"
+              " xml.exclusiveC14n(doc.pdu.elem1, null, false, 'n0 n1')]"
+              ".map(v => (new TextDecoder().decode(v)))"),
+      njs_str("<n1:elem1 xmlns:n0=\"http://a\" xmlns:n1=\"http://b\">foo</n1:elem1>,"
+              "<n1:elem1 xmlns:n1=\"http://b\">foo</n1:elem1>,"
+              "<n1:elem1 xmlns:n1=\"http://b\"><!-- comment -->foo</n1:elem1>,"
+              "<n1:elem1 xmlns:n0=\"http://a\" xmlns:n1=\"http://b\">foo</n1:elem1>") },
+
+    { njs_str("const xml = require('xml');"
+              "let doc = xml.parse(`<note><to b=\"bar\" a= \"foo\" >Tove</to><from>Jani</from></note>`);"
+              "let dec = new TextDecoder();"
+              "dec.decode(xml.exclusiveC14n(doc.note))"),
+      njs_str("<note><to a=\"foo\" b=\"bar\">Tove</to><from>Jani</from></note>") },
+
+    { njs_str("const xml = require('xml');"
+              "let doc = xml.parse(`<note><to b=\"bar\" a= \"foo\" >Tove</to><from>Jani</from></note>`);"
+              "let dec = new TextDecoder();"
+              "dec.decode(xml.exclusiveC14n(doc.note, doc.note.to))"),
+      njs_str("<note><from>Jani</from></note>") },
+
+    { njs_str("const xml = require('xml');"
+              "let doc = xml.parse(`<note><to b=\"bar\" a= \"foo\" >Tove</to><from>Jani</from></note>`);"
+              "njs.dump(doc)"),
+      njs_str("XMLDoc {note:XMLNode {$name:'note',"
+              "$tags:[XMLNode {$name:'to',"
+              "$attrs:XMLAttr {b:'bar',a:'foo'},"
+              "$text:'Tove'},"
+              "XMLNode {$name:'from',$text:'Jani'}]}}") },
+
+    { njs_str("const xml = require('xml');"
+              "let doc = xml.parse(`<note><to b=\"bar\" a= \"foo\" >Tove</to><from>Jani</from></note>`);"
+              "JSON.stringify(doc)"),
+      njs_str("{\"note\":{\"$name\":\"note\",\"$tags\":"
+              "[{\"$name\":\"to\",\"$attrs\":{\"b\":\"bar\",\"a\":\"foo\"},"
+              "\"$text\":\"Tove\"},{\"$name\":\"from\",\"$text\":\"Jani\"}]}}") },
+};
+
+
 static njs_unit_test_t  njs_module_test[] =
 {
     { njs_str("function f(){return 2}; var f; f()"),
@@ -24281,6 +24348,17 @@ static njs_test_suite_t  njs_suites[] =
       { .externals = 1, .repeat = 1, .unsafe = 1 },
       njs_webcrypto_test,
       njs_nitems(njs_webcrypto_test),
+      njs_unit_test },
+
+    {
+#if (NJS_HAVE_LIBXML2 && !NJS_HAVE_MEMORY_SANITIZER)
+        njs_str("xml"),
+#else
+        njs_str(""),
+#endif
+      { .externals = 1, .repeat = 1, .unsafe = 1 },
+      njs_xml_test,
+      njs_nitems(njs_xml_test),
       njs_unit_test },
 
     { njs_str("module"),

@@ -45,6 +45,8 @@ async function http_module(r: NginxHTTPRequest) {
     r.headersOut['Set-Cookie'] = ['aaa', 'bbb'];
     r.headersOut['Foo'] = ['aaa', 'bbb'];
 
+    let values: Array<string> = r.rawHeadersIn.filter(v=>v[0].toLowerCase() == 'foo').map(v=>v[1]);
+
     // r.log
 
     r.log(bs);
@@ -91,12 +93,24 @@ async function http_module(r: NginxHTTPRequest) {
             throw 'oops'
         };
 
+        let out: Array<string> = reply.headers.getAll("foo");
+        let has: boolean = reply.headers.has("foo");
+
+        reply.headers.append("foo", "xxx");
+        reply.headers.delete("xxx");
+        reply.headers.forEach((name, value) => { /* do something. */ });
+
         return reply.text()
     })
     .then(body => r.return(200, body))
     .catch(e => r.return(501, e.message))
 
+
     let response = await ngx.fetch('http://nginx.org/');
+    let response2 = new Response("xxx", {headers: {"Content-Type": "text/plain"}, status: 404});
+
+    let req = new Request("http://nginx.org", {method: "POST", headers: new Headers(["Foo", "bar"])});
+    let response3 = await ngx.fetch(req);
 
     // js_body_filter
     r.sendBuffer(Buffer.from("xxx"), {last:true});

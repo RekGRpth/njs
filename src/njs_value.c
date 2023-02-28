@@ -157,7 +157,7 @@ njs_value_to_primitive(njs_vm_t *vm, njs_value_t *dst, njs_value_t *value,
             lhq.key_hash = hashes[hint];
             lhq.key = names[hint];
 
-            ret = njs_object_property(vm, value, &lhq, &method);
+            ret = njs_object_property(vm, njs_object(value), &lhq, &method);
 
             if (njs_slow_path(ret == NJS_ERROR)) {
                 return ret;
@@ -1487,13 +1487,16 @@ slow_path:
         return NJS_ERROR;
     }
 
-    /* GC: release value. */
     if (removed != NULL) {
-        njs_value_assign(removed, njs_prop_value(prop));
+        if (njs_is_valid(njs_prop_value(prop))) {
+            njs_value_assign(removed, njs_prop_value(prop));
+
+        } else {
+            njs_set_undefined(removed);
+        }
     }
 
     prop->type = NJS_WHITEOUT;
-    njs_set_invalid(njs_prop_value(prop));
 
     return NJS_OK;
 }

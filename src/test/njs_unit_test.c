@@ -7276,6 +7276,34 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("var a = [1,2]; a.sort(() => {a.length = 65535}); a.length"),
       njs_str("65535") },
 
+    { njs_str("var a = [];"
+              "var shift = true;"
+              "for (let i = 0; i < 64; i++) {"
+              "    a[i] = { toString() {"
+              "                 if (shift) { a.shift() };"
+              "                 return (63 - i).toString().padStart(2, '0');"
+              "             }"
+              "           };"
+              "}"
+              "a.sort();"
+              "shift = false;"
+              "[a.length, a[0].toString(), a[63].toString()]"),
+      njs_str("64,00,63") },
+
+    { njs_str("var a = [];"
+              "var shift = true;"
+              "for (let i = 0; i < 64; i++) {"
+              "    a[i] = { toString() {"
+              "                 if (shift) { a.shift() };"
+              "                 return (i).toString().padStart(2, '0');"
+              "             }"
+              "           };"
+              "}"
+              "a.sort();"
+              "shift = false;"
+              "[a.length, a[0].toString(), a[63].toString()]"),
+      njs_str("64,00,63") },
+
     /*
       Array.prototype.keys()
       Array.prototype.values()
@@ -13310,6 +13338,9 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("Number('123')"),
       njs_str("123") },
+
+    { njs_str("['1', ' 1 ', '1\\t', '1\\n', '1\\r\\n'].reduce((a, x) => a + Number(x), 0)"),
+      njs_str("5") },
 
     { njs_str("Number('0.'+'1'.repeat(128))"),
       njs_str("0.1111111111111111") },

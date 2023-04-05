@@ -126,14 +126,12 @@ struct njs_vm_s {
 
     njs_arr_t                *scope_absolute;
     njs_value_t              **levels[NJS_LEVEL_MAX];
-    size_t                   global_items;
 
     njs_external_ptr_t       external;
 
     njs_native_frame_t       *top_frame;
     njs_frame_t              *active_frame;
 
-    njs_rbtree_t             *variables_hash;
     njs_lvlhsh_t             keywords_hash;
     njs_lvlhsh_t             values_hash;
 

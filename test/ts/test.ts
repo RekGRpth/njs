@@ -2,6 +2,7 @@ import fs from 'fs';
 import qs from 'querystring';
 import cr from 'crypto';
 import xml from 'xml';
+import zlib from 'zlib';
 
 async function http_module(r: NginxHTTPRequest) {
     var bs: NjsByteString;
@@ -174,11 +175,32 @@ function xml_module(str: NjsByteString) {
     children = node.$tags;
     selectedChildren = node.$tags$xxx;
 
-    node?.xxx?.yyy?.$attr$zzz;
+    node?.$tag$xxx?.$tag$yyy?.$attr$zzz;
 
     let buf:Buffer = xml.exclusiveC14n(node);
-    buf = xml.exclusiveC14n(doc, node.xxx, false);
+    buf = xml.exclusiveC14n(doc, node.$tag$xxx, false);
     buf = xml.exclusiveC14n(node, null, true, "aa bb");
+
+    node.setText("xxx");
+    node.removeText();
+    node.setText(null);
+
+    node.addChild(node);
+    node.removeChildren('xx');
+
+    node.removeAttribute('xx');
+    node.removeAllAttributes();
+    node.setAttribute('xx', 'yy');
+    node.setAttribute('xx', null);
+    node.$tags = [node, node];
+}
+
+function zlib_module(str: NjsByteString) {
+    zlib.deflateRawSync(str, {level: zlib.constants.Z_BEST_COMPRESSION, memLevel: 9});
+    zlib.deflateSync(str, {strategy: zlib.constants.Z_RLE});
+
+    zlib.inflateRawSync(str, {windowBits: 14});
+    zlib.inflateSync(str, {chunkSize: 2048});
 }
 
 function crypto_module(str: NjsByteString) {
@@ -188,6 +210,7 @@ function crypto_module(str: NjsByteString) {
 
     h = cr.createHash("sha1");
     h = h.update(str).update(Buffer.from([0]));
+    h = h.copy();
     b = h.digest();
 
     s = cr.createHash("sha256").digest("hex");

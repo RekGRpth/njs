@@ -405,13 +405,13 @@ njs_unit_test_r_subrequest(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
         return NJS_ERROR;
     }
 
-    ev = njs_mp_alloc(vm->mem_pool, sizeof(njs_external_ev_t));
+    ev = njs_mp_alloc(njs_vm_memory_pool(vm), sizeof(njs_external_ev_t));
     if (ev == NULL) {
         njs_memory_error(vm);
         return NJS_ERROR;
     }
 
-    ret = njs_vm_promise_create(vm, &value, &ev->callbacks[0]);
+    ret = njs_vm_promise_create(vm, &value, njs_value_arg(&ev->callbacks[0]));
     if (ret != NJS_OK) {
         return NJS_ERROR;
     }
@@ -545,6 +545,226 @@ njs_unit_test_constructor(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     return njs_vm_external_create(vm, retval, njs_external_r_proto_id,
                                   sr, 0);
 }
+
+
+static njs_int_t
+njs_262_detach_array_buffer(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
+    njs_index_t unused, njs_value_t *retval)
+{
+    njs_value_t         *value;
+    njs_array_buffer_t  *buffer;
+
+    value = njs_arg(args, nargs, 1);
+    if (njs_slow_path(!njs_is_array_buffer(value))) {
+        njs_type_error(vm, "\"this\" is not an ArrayBuffer");
+        return NJS_ERROR;
+    }
+
+    buffer = njs_array_buffer(value);
+    buffer->u.data = NULL;
+    buffer->size = 0;
+
+    njs_set_null(retval);
+
+    return NJS_OK;
+}
+
+
+static njs_int_t
+njs_262_bytes_from_array_like(njs_vm_t *vm, njs_value_t *value,
+    njs_value_t *retval)
+{
+    u_char              *p;
+    int64_t             length;
+    uint32_t            u32;
+    njs_int_t           ret;
+    njs_array_t         *array;
+    njs_value_t         *octet, index, prop;
+    njs_array_buffer_t  *buffer;
+
+    array = NULL;
+    buffer = NULL;
+
+    switch (value->type) {
+    case NJS_ARRAY:
+        array = njs_array(value);
+        length = array->length;
+        break;
+
+    case NJS_ARRAY_BUFFER:
+    case NJS_TYPED_ARRAY:
+
+        if (njs_is_typed_array(value)) {
+            buffer = njs_typed_array(value)->buffer;
+
+        } else {
+            buffer = njs_array_buffer(value);
+        }
+
+        length = buffer->size;
+        break;
+
+    default:
+        ret = njs_object_length(vm, value, &length);
+        if (njs_slow_path(ret == NJS_ERROR)) {
+            return ret;
+        }
+    }
+
+    p = njs_string_alloc(vm, retval, length, 0);
+    if (njs_slow_path(p == NULL)) {
+        return NJS_ERROR;
+    }
+
+    if (array != NULL) {
+        octet = array->start;
+
+        while (length != 0) {
+            ret = njs_value_to_uint32(vm, octet, &u32);
+            if (njs_slow_path(ret != NJS_OK)) {
+                return ret;
+            }
+
+            *p++ = (u_char) u32;
+            octet++;
+            length--;
+        }
+
+    } else if (buffer != NULL) {
+        memcpy(p, buffer->u.u8, length);
+
+    } else {
+        p += length - 1;
+
+        while (length != 0) {
+            njs_set_number(&index, length - 1);
+
+            ret = njs_value_property(vm, value, &index, &prop);
+            if (njs_slow_path(ret == NJS_ERROR)) {
+                return ret;
+            }
+
+            ret = njs_value_to_uint32(vm, &prop, &u32);
+            if (njs_slow_path(ret != NJS_OK)) {
+                return ret;
+            }
+
+            *p-- = (u_char) u32;
+            length--;
+        }
+    }
+
+    return NJS_OK;
+}
+
+
+static njs_int_t
+njs_262_bytes_from_string(njs_vm_t *vm, const njs_value_t *string,
+    const njs_value_t *encoding, njs_value_t *retval)
+{
+    njs_str_t  enc, str;
+
+    if (!njs_is_string(encoding)) {
+        njs_type_error(vm, "\"encoding\" must be a string");
+        return NJS_ERROR;
+    }
+
+    njs_string_get(encoding, &enc);
+    njs_string_get(string, &str);
+
+    if (enc.length == 3 && memcmp(enc.start, "hex", 3) == 0) {
+        return njs_string_decode_hex(vm, retval, &str);
+
+    } else if (enc.length == 6 && memcmp(enc.start, "base64", 6) == 0) {
+        return njs_string_decode_base64(vm, retval, &str);
+
+    } else if (enc.length == 9 && memcmp(enc.start, "base64url", 9) == 0) {
+        return njs_string_decode_base64url(vm, retval, &str);
+    }
+
+    njs_type_error(vm, "Unknown encoding: \"%V\"", &enc);
+
+    return NJS_ERROR;
+}
+
+
+/*
+ * $262.byteString(array-like).
+ * Converts an array-like object containing octets into a byte string.
+ *
+ * $262.byteString(string[, encoding]).
+ * Converts a string using provided encoding: hex, base64, base64url to
+ * a byte string.
+ *
+ * Note: the function produces a byte string, and byte strings are deprecated.
+ * The function is provided for testing of existing code which works with
+ * byte strings.  When code working with byte strings is removed
+ * the function will be removed as well.
+ */
+
+static njs_int_t
+njs_262_byte_string(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
+    njs_index_t unused, njs_value_t *retval)
+{
+    njs_value_t  *value;
+
+    value = njs_arg(args, nargs, 1);
+
+    if (njs_is_string(value)) {
+        return njs_262_bytes_from_string(vm, value, njs_arg(args, nargs, 2),
+                                            retval);
+
+    } else if (njs_is_object(value)) {
+
+        if (njs_is_object_string(value)) {
+            value = njs_object_value(value);
+            return njs_262_bytes_from_string(vm, value,
+                                                njs_arg(args, nargs, 2),
+                                                retval);
+        }
+
+        return njs_262_bytes_from_array_like(vm, value, retval);
+    }
+
+    njs_type_error(vm, "value must be a string or array-like object");
+
+    return NJS_ERROR;
+}
+
+
+static njs_external_t  njs_unit_test_262_external[] = {
+
+    {
+        .flags = NJS_EXTERN_PROPERTY | NJS_EXTERN_SYMBOL,
+        .name.symbol = NJS_SYMBOL_TO_STRING_TAG,
+        .u.property = {
+            .value = "$262",
+        }
+    },
+
+    {
+        .flags = NJS_EXTERN_METHOD,
+        .name.string = njs_str("detachArrayBuffer"),
+        .writable = 1,
+        .configurable = 1,
+        .enumerable = 1,
+        .u.method = {
+            .native = njs_262_detach_array_buffer,
+        }
+    },
+
+    {
+        .flags = NJS_EXTERN_METHOD,
+        .name.string = njs_str("byteString"),
+        .writable = 1,
+        .configurable = 1,
+        .enumerable = 1,
+        .u.method = {
+            .native = njs_262_byte_string,
+        }
+    },
+
+};
 
 
 static njs_external_t  njs_unit_test_r_c[] = {
@@ -931,6 +1151,37 @@ njs_externals_init_internal(njs_vm_t *vm, njs_unit_test_req_init_t *init,
 
 
 njs_int_t
+njs_externals_262_init(njs_vm_t *vm)
+{
+    njs_int_t           ret, proto_id;
+    njs_opaque_value_t  value;
+
+    static const njs_str_t  dollar_262 = njs_str("$262");
+
+    proto_id = njs_vm_external_prototype(vm, njs_unit_test_262_external,
+                                       njs_nitems(njs_unit_test_262_external));
+    if (njs_slow_path(proto_id < 0)) {
+        njs_printf("njs_vm_external_prototype() failed\n");
+        return NJS_ERROR;
+    }
+
+    ret = njs_vm_external_create(vm, njs_value_arg(&value), proto_id, NULL, 1);
+    if (njs_slow_path(ret != NJS_OK)) {
+        njs_printf("njs_vm_external_create() failed\n");
+        return NJS_ERROR;
+    }
+
+    ret = njs_vm_bind(vm, &dollar_262, njs_value_arg(&value), 1);
+    if (njs_slow_path(ret != NJS_OK)) {
+        njs_printf("njs_vm_bind() failed\n");
+        return NJS_ERROR;
+    }
+
+    return NJS_OK;
+}
+
+
+njs_int_t
 njs_externals_shared_init(njs_vm_t *vm)
 {
     return njs_externals_init_internal(vm, njs_test_requests, 1, 1);
@@ -948,7 +1199,7 @@ njs_int_t
 njs_external_env_init(njs_external_env_t *env)
 {
     if (env != NULL) {
-        njs_value_invalid_set(&env->retval);
+        njs_value_invalid_set(njs_value_arg(&env->retval));
         njs_queue_init(&env->events);
     }
 
@@ -978,7 +1229,8 @@ njs_external_process_events(njs_vm_t *vm, njs_external_env_t *env)
         ev->link.prev = NULL;
         ev->link.next = NULL;
 
-        njs_vm_post_event(vm, ev->vm_event, &ev->args[0], ev->nargs);
+        njs_vm_post_event(vm, ev->vm_event, njs_value_arg(&ev->args[0]),
+                          ev->nargs);
     }
 
     return NJS_OK;

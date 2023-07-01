@@ -2975,6 +2975,9 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("for(var``>0; 0 ;) ;"),
       njs_str("SyntaxError: Unexpected token \"`\" in 1") },
 
+    { njs_str("for(i;;)for(-new+3;;)break;"),
+      njs_str("SyntaxError: Unexpected token \"+\" in 1") },
+
     /* switch. */
 
     { njs_str("switch"),
@@ -25087,7 +25090,7 @@ static njs_test_suite_t  njs_suites[] =
       njs_disabled_denormals_tests },
 
     {
-#if (NJS_HAVE_OPENSSL)
+#if (NJS_HAVE_OPENSSL && !NJS_HAVE_MEMORY_SANITIZER)
         njs_str("webcrypto"),
 #else
         njs_str(""),

@@ -86,6 +86,10 @@ http {
             js_content test.incr;
         }
 
+        location /items {
+            js_content test.items;
+        }
+
         location /keys {
             js_content test.keys;
         }
@@ -190,8 +194,8 @@ $t->write_file('test.js', <<'EOF');
 
     function incr(r) {
         var dict = ngx.shared[r.args.dict];
-        var val = dict.incr(r.args.key, parseInt(r.args.by),
-                            parseInt(r.args.def));
+        var def = r.args.def ? parseInt(r.args.def) : 0;
+        var val = dict.incr(r.args.key, parseInt(r.args.by), def);
         r.return(200, val);
     }
 
@@ -206,6 +210,19 @@ $t->write_file('test.js', <<'EOF');
         }
 
         r.return(200, `[${ks.toSorted()}]`);
+    }
+
+    function items(r) {
+        var kvs;
+
+        if (r.args.max) {
+            kvs = ngx.shared[r.args.dict].items(parseInt(r.args.max));
+
+        } else {
+            kvs = ngx.shared[r.args.dict].items();
+        }
+
+        r.return(200, njs.dump(kvs.toSorted()));
     }
 
     function name(r) {
@@ -247,11 +264,11 @@ $t->write_file('test.js', <<'EOF');
     }
 
     export default { add, capacity, chain, clear, del, free_space, get, has,
-                     incr, keys, name, njs: test_njs, pop, replace, set, size,
-                     zones };
+                     incr, items, keys, name, njs: test_njs, pop, replace, set,
+                     size, zones };
 EOF
 
-$t->try_run('no js_shared_dict_zone')->plan(41);
+$t->try_run('no js_shared_dict_zone')->plan(43);
 
 ###############################################################################
 
@@ -272,9 +289,10 @@ like(http_get('/set?dict=waka&key=FOO&value=42'), qr/true/, 'set waka.FOO');
 like(http_get('/chain?dict=bar&key=FOO2&value=aaa'), qr/aaa/, 'chain bar.FOO2');
 
 like(http_get('/incr?dict=waka&key=FOO&by=5'), qr/47/, 'incr waka.FOO');
-like(http_get('/incr?dict=waka&key=FOO2&by=1'), qr/1/, 'incr waka.FOO2');
-like(http_get('/incr?dict=waka&key=FOO2&by=2'), qr/3/, 'incr waka.FOO2');
-like(http_get('/incr?dict=waka&key=FOO3&by=3&def=5'), qr/8/, 'incr waka.FOO3');
+like(http_get('/incr?dict=waka&key=FOO2&by=7777'), qr/7777/, 'incr waka.FOO2');
+like(http_get('/incr?dict=waka&key=FOO2&by=2'), qr/7779/, 'incr waka.FOO2');
+like(http_get('/incr?dict=waka&key=FOO3&by=3333&def=5'), qr/3338/,
+	'incr waka.FOO3');
 
 like(http_get('/has?dict=foo&key=FOO'), qr/true/, 'has foo.FOO');
 like(http_get('/has?dict=foo&key=NOT_EXISTING'), qr/false/,
@@ -310,6 +328,10 @@ like(http_get('/keys?dict=foo'), qr/\[]/, 'foo keys after expire');
 like(http_get('/keys?dict=bar'), qr/\[FOO\,FOO2]/, 'bar keys after a delay');
 like(http_get('/size?dict=foo'), qr/size: 0/,
 	'no of items in foo after expire');
+like(http_get('/items?dict=bar'), qr/\[\['FOO','zzz'],\['FOO2','aaa']]/,
+	'bar items');
+like(http_get('/items?dict=waka'),
+	qr/\[\['FOO',47],\['FOO2',7779],\['FOO3',3338]]/, 'waka items');
 
 }
 

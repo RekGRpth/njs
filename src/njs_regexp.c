@@ -1541,10 +1541,6 @@ njs_regexp_prototype_symbol_replace(njs_vm_t *vm, njs_value_t *args,
                                               arguments, ncaptures, &groups,
                                               replace, retval);
 
-            if (njs_object_slots(r)) {
-                njs_regexp_exec_result_free(vm, njs_array(r));
-            }
-
         } else {
             ret = njs_array_expand(vm, array, 0,
                                    njs_is_defined(&groups) ? 3 : 2);
@@ -1586,6 +1582,15 @@ njs_regexp_prototype_symbol_replace(njs_vm_t *vm, njs_value_t *args,
 
             next_pos = pos + (int64_t) m.length;
         }
+
+        if (!func_replace && njs_object_slots(r)) {
+            /*
+              * Doing free here ONLY for non-function replace, because
+              * otherwise we cannot be certain the result of match
+              * was not stored elsewhere.
+              */
+            njs_regexp_exec_result_free(vm, njs_array(r));
+        }
     }
 
     if (next_pos < (int64_t) s.size) {
@@ -1625,7 +1630,7 @@ njs_regexp_prototype_symbol_split(njs_vm_t *vm, njs_value_t *args,
     njs_value_t        r, z, this, s_lvalue, setval, constructor;
     njs_object_t       *object;
     const u_char       *start, *end;
-    njs_string_prop_t  s;
+    njs_string_prop_t  s, sv;
     njs_value_t        arguments[2];
 
     static const njs_value_t  string_lindex = njs_string("lastIndex");
@@ -1815,14 +1820,17 @@ njs_regexp_prototype_symbol_split(njs_vm_t *vm, njs_value_t *args,
         ncaptures = njs_max(ncaptures - 1, 0);
 
         for (i = 1; i <= ncaptures; i++) {
-            value = njs_array_push(vm, array);
-            if (njs_slow_path(value == NULL)) {
+            ret = njs_value_property_i64(vm, &z, i, retval);
+            if (njs_slow_path(ret == NJS_ERROR)) {
                 return NJS_ERROR;
             }
 
-            ret = njs_value_property_i64(vm, &z, i, value);
-            if (njs_slow_path(ret == NJS_ERROR)) {
-                return NJS_ERROR;
+            (void) njs_string_prop(&sv, retval);
+
+            ret = njs_array_string_add(vm, array, sv.start, sv.size,
+                                       sv.length);
+            if (njs_slow_path(ret != NJS_OK)) {
+                return ret;
             }
 
             if (array->length == limit) {

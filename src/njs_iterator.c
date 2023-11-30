@@ -50,7 +50,6 @@ njs_array_iterator_create(njs_vm_t *vm, const njs_value_t *target,
         return NJS_ERROR;
     }
 
-    /* GC retain it->target */
     it->target = *target;
     it->next = 0;
     it->kind = kind;
@@ -163,7 +162,6 @@ njs_array_iterator_next(njs_vm_t *vm, njs_value_t *iterator,
 
 release:
 
-    /* GC release it->target */
     njs_mp_free(vm->mem_pool, it);
     njs_set_invalid(njs_object_value(iterator));
 
@@ -542,7 +540,7 @@ njs_object_iterate_reverse(njs_vm_t *vm, njs_iterator_args_t *args,
             }
 
             while (i-- > to) {
-                pos = njs_utf8_prev(p);
+                pos = njs_utf8_prev(p, string_prop.start);
 
                 /* This cannot fail. */
                 (void) njs_string_new(vm, &character, pos, p - pos , 1);

@@ -117,9 +117,7 @@ struct ngx_js_http_s {
     ngx_pool_t                    *pool;
 
     njs_vm_t                      *vm;
-    njs_external_ptr_t             external;
-    njs_vm_event_t                 vm_event;
-    ngx_js_event_handler_pt        event_handler;
+    ngx_js_event_t                *event;
 
     ngx_resolver_ctx_t            *ctx;
     ngx_addr_t                     addr;
@@ -178,7 +176,7 @@ static njs_int_t ngx_js_headers_fill(njs_vm_t *vm, ngx_js_headers_t *headers,
 static ngx_js_http_t *ngx_js_http_alloc(njs_vm_t *vm, ngx_pool_t *pool,
     ngx_log_t *log);
 static void njs_js_http_destructor(njs_external_ptr_t external,
-    njs_host_event_t host);
+    ngx_js_event_t *event);
 static void ngx_js_resolve_handler(ngx_resolver_ctx_t *ctx);
 static njs_int_t ngx_js_fetch_promissified_result(njs_vm_t *vm,
     njs_value_t *result, njs_int_t rc, njs_value_t *retval);
@@ -695,9 +693,6 @@ ngx_js_ext_fetch(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     if (http == NULL) {
         return NJS_ERROR;
     }
-
-    http->external = external;
-    http->event_handler = ngx_external_event_handler(vm, external);
 
     ret = ngx_js_request_constructor(vm, &request, &u, external, args, nargs);
     if (ret != NJS_OK) {
@@ -1274,8 +1269,9 @@ static ngx_js_http_t *
 ngx_js_http_alloc(njs_vm_t *vm, ngx_pool_t *pool, ngx_log_t *log)
 {
     njs_int_t        ret;
+    ngx_js_ctx_t    *ctx;
     ngx_js_http_t   *http;
-    njs_vm_event_t   vm_event;
+    ngx_js_event_t  *event;
     njs_function_t  *callback;
 
     http = ngx_pcalloc(pool, sizeof(ngx_js_http_t));
@@ -1302,12 +1298,22 @@ ngx_js_http_alloc(njs_vm_t *vm, ngx_pool_t *pool, ngx_log_t *log)
         goto failed;
     }
 
-    vm_event = njs_vm_add_event(vm, callback, 1, http, njs_js_http_destructor);
-    if (vm_event == NULL) {
+    event = njs_mp_zalloc(njs_vm_memory_pool(vm), sizeof(ngx_js_event_t));
+    if (njs_slow_path(event == NULL)) {
         goto failed;
     }
 
-    http->vm_event = vm_event;
+    ctx = ngx_external_ctx(vm, njs_vm_external_ptr(vm));
+
+    event->vm = vm;
+    event->function = callback;
+    event->destructor = njs_js_http_destructor;
+    event->fd = ctx->event_id++;
+    event->data = http;
+
+    ngx_js_add_event(ctx, event);
+
+    http->event = event;
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, log, 0, "js fetch alloc:%p", http);
 
@@ -1429,11 +1435,11 @@ ngx_js_http_close_connection(ngx_connection_t *c)
 
 
 static void
-njs_js_http_destructor(njs_external_ptr_t external, njs_host_event_t host)
+njs_js_http_destructor(njs_external_ptr_t external, ngx_js_event_t *event)
 {
     ngx_js_http_t  *http;
 
-    http = host;
+    http = event->data;
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, http->log, 0, "js fetch destructor:%p",
                    http);
@@ -1456,7 +1462,6 @@ ngx_js_fetch_promissified_result(njs_vm_t *vm, njs_value_t *result,
 {
     njs_int_t            ret;
     njs_function_t      *callback;
-    njs_vm_event_t       vm_event;
     njs_opaque_value_t   promise, arguments[2];
 
     ret = njs_vm_promise_create(vm, njs_value_arg(&promise),
@@ -1470,11 +1475,6 @@ ngx_js_fetch_promissified_result(njs_vm_t *vm, njs_value_t *result,
         goto error;
     }
 
-    vm_event = njs_vm_add_event(vm, callback, 1, NULL, NULL);
-    if (vm_event == NULL) {
-        goto error;
-    }
-
     njs_value_assign(&arguments[0], &arguments[(rc != NJS_OK)]);
 
     if (rc != NJS_OK) {
@@ -1484,7 +1484,7 @@ ngx_js_fetch_promissified_result(njs_vm_t *vm, njs_value_t *result,
         njs_value_assign(&arguments[1], result);
     }
 
-    ret = njs_vm_post_event(vm, vm_event, njs_value_arg(&arguments), 2);
+    ret = njs_vm_enqueue_job(vm, callback, njs_value_arg(&arguments), 2);
     if (ret == NJS_ERROR) {
         goto error;
     }
@@ -1505,7 +1505,10 @@ static void
 ngx_js_http_fetch_done(ngx_js_http_t *http, njs_opaque_value_t *retval,
     njs_int_t rc)
 {
-    njs_opaque_value_t  arguments[2], *action;
+    njs_vm_t            *vm;
+    ngx_js_ctx_t        *ctx;
+    ngx_js_event_t      *event;
+    njs_opaque_value_t   arguments[2], *action;
 
     ngx_log_debug2(NGX_LOG_DEBUG_EVENT, http->log, 0,
                    "js fetch done http:%p rc:%i", http, (ngx_int_t) rc);
@@ -1515,12 +1518,20 @@ ngx_js_http_fetch_done(ngx_js_http_t *http, njs_opaque_value_t *retval,
         http->peer.connection = NULL;
     }
 
-    if (http->vm_event != NULL) {
+    if (http->event != NULL) {
         action = &http->promise_callbacks[(rc != NJS_OK)];
         njs_value_assign(&arguments[0], action);
         njs_value_assign(&arguments[1], retval);
-        http->event_handler(http->external, http->vm_event,
-                            njs_value_arg(&arguments), 2);
+
+        vm = http->vm;
+        event = http->event;
+
+        rc = ngx_js_call(vm, event->function, njs_value_arg(&arguments), 2);
+
+        ctx = ngx_external_ctx(vm,  njs_vm_external_ptr(vm));
+        ngx_js_del_event(ctx, event);
+
+        ngx_external_event_finalize(vm)(njs_vm_external_ptr(vm), rc);
     }
 }
 

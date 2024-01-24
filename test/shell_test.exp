@@ -476,6 +476,15 @@ ReferenceError: \"ref\" is not defined
     at anonymous \\\(string:1\\\)
     at main \\\(string:1\\\)\n$"
 
+njs_test {
+    {"setImmediate(() => { console.log('x'); return Promise.reject('xx'); })\r\n"
+     "0\r\nx\r\nThrown:\r\nError: unhandled promise rejection: xx\r\n"}
+    {"setImmediate(() => { console.log('x'); return Promise.reject('xx'); })\r\n"
+     "1\r\nx\r\nThrown:\r\nError: unhandled promise rejection: xx\r\n"}
+    {"42\r\n"
+     "42\r\n"}
+}
+
 # CLI OPTIONS
 
 # help
@@ -554,8 +563,8 @@ njs_test {
 
 # quiet mode
 
-njs_run {"-q" "test/js/import_relative_path.t.js"} \
-        "SyntaxError: Cannot find module \"name.js\" in 7"
+njs_run {"-q" "test/js/import_chain.t.js"} \
+        "SyntaxError: Cannot find module \"lib2.js\" in 7"
 
 # sandboxing
 

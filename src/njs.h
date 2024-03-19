@@ -129,6 +129,18 @@ typedef enum {
 
 
 typedef enum {
+#define njs_object_enum_kind(flags) (flags & 7)
+    NJS_ENUM_KEYS = 1,
+    NJS_ENUM_VALUES = 2,
+    NJS_ENUM_BOTH = 4,
+#define njs_object_enum(flags) (flags & (NJS_ENUM_STRING | NJS_ENUM_SYMBOL))
+    NJS_ENUM_STRING = 8,
+    NJS_ENUM_SYMBOL = 16,
+    NJS_ENUM_ENUMERABLE_ONLY = 32,
+} njs_object_enum_t;
+
+
+typedef enum {
     /*
      * Extern property type.
      */
@@ -304,8 +316,6 @@ NJS_EXPORT njs_int_t njs_vm_pending(njs_vm_t *vm);
 NJS_EXPORT void njs_vm_set_rejection_tracker(njs_vm_t *vm,
         njs_rejection_tracker_t rejection_tracker, void *opaque);
 
-NJS_EXPORT void *njs_vm_completions(njs_vm_t *vm, njs_str_t *expression);
-
 /*
  * Runs the specified function with provided arguments.
  *  NJS_OK successful run.
@@ -368,10 +378,13 @@ NJS_EXPORT njs_int_t njs_vm_bind(njs_vm_t *vm, const njs_str_t *var_name,
 njs_int_t njs_vm_bind_handler(njs_vm_t *vm, const njs_str_t *var_name,
     njs_prop_handler_t handler, uint16_t magic16, uint32_t magic32,
     njs_bool_t shared);
+NJS_EXPORT njs_int_t njs_vm_global(njs_vm_t *vm, njs_value_t *retval);
 NJS_EXPORT njs_int_t njs_vm_value(njs_vm_t *vm, const njs_str_t *path,
     njs_value_t *retval);
 NJS_EXPORT njs_function_t *njs_vm_function(njs_vm_t *vm, const njs_str_t *name);
 NJS_EXPORT njs_bool_t njs_vm_constructor(njs_vm_t *vm);
+NJS_EXPORT njs_int_t njs_vm_prototype(njs_vm_t *vm, njs_value_t *value,
+    njs_value_t *retval);
 
 NJS_EXPORT void njs_vm_throw(njs_vm_t *vm, const njs_value_t *value);
 NJS_EXPORT void njs_vm_error2(njs_vm_t *vm, unsigned error_type,
@@ -494,6 +507,10 @@ NJS_EXPORT njs_int_t njs_vm_object_alloc(njs_vm_t *vm, njs_value_t *retval,
     ...);
 NJS_EXPORT njs_value_t *njs_vm_object_keys(njs_vm_t *vm, njs_value_t *value,
     njs_value_t *retval);
+NJS_EXPORT njs_value_t *njs_vm_value_enumerate(njs_vm_t *vm, njs_value_t *value,
+    uint32_t flags, njs_value_t *retval);
+NJS_EXPORT njs_value_t *njs_vm_value_own_enumerate(njs_vm_t *vm,
+    njs_value_t *value, uint32_t flags, njs_value_t *retval);
 NJS_EXPORT njs_value_t *njs_vm_object_prop(njs_vm_t *vm,
     njs_value_t *value, const njs_str_t *key, njs_opaque_value_t *retval);
 NJS_EXPORT njs_int_t njs_vm_object_prop_set(njs_vm_t *vm, njs_value_t *value,

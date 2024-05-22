@@ -226,13 +226,6 @@ njs_json_stringify(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     switch (space->type) {
     case NJS_STRING:
         length = njs_string_prop(&prop, space);
-
-        if (njs_is_byte_string(&prop)) {
-            njs_internal_error(vm, "space argument cannot be"
-                               " a byte string");
-            return NJS_ERROR;
-        }
-
         p = njs_string_offset(&prop, njs_min(length, 10));
 
         stringify->space.start = prop.start;
@@ -548,7 +541,6 @@ njs_json_parse_string(njs_json_parse_ctx_t *ctx, njs_value_t *value,
 {
     u_char        ch, *s, *dst;
     size_t        size, surplus;
-    ssize_t       length;
     uint32_t      utf, utf_low;
     njs_int_t     ret;
     const u_char  *start, *last;
@@ -742,12 +734,7 @@ njs_json_parse_string(njs_json_parse_ctx_t *ctx, njs_value_t *value,
         start = dst;
     }
 
-    length = njs_utf8_length(start, size);
-    if (njs_slow_path(length < 0)) {
-        length = 0;
-    }
-
-    ret = njs_string_new(ctx->vm, value, (u_char *) start, size, length);
+    ret = njs_string_create(ctx->vm, value, (u_char *) start, size);
     if (njs_slow_path(ret != NJS_OK)) {
         return NULL;
     }
@@ -1558,7 +1545,7 @@ njs_json_append_string(njs_chb_t *chain, const njs_value_t *value, char quote)
             dst = njs_utf8_copy(dst, &p, end);
 
         } else {
-            /* Byte or ASCII string. */
+            /* ASCII string. */
             *dst++ = *p++;
         }
 

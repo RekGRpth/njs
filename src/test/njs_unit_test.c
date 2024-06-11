@@ -10016,13 +10016,17 @@ static njs_unit_test_t  njs_test[] =
               " '%',"
               " '%0',"
               " '%QQ',"
+              " '%C0%' + '0',"
               " '%C0%10',"
+              " '%C0%80',"
               " '%DC%C7',"
               " '%80%81%82',"
               " '%EF%5C%A0',"
               " '%EF%A0%5E',"
+              " '%E0%EF%' + '0',"
               " '%E0%EF%A0',"
               " '%E0%A0%EF',"
+              " '%F0%A2%95%' + '0',"
               " '%FF%A2%95%BB',"
               "].every(v=>{try { decodeURI(v)} catch(e) {return e.name == 'URIError'}})"),
       njs_str("true")},
@@ -16281,6 +16285,12 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("Date.parse('2011-06-24T06:01:02.6255555Z')"),
       njs_str("1308895262625") },
 
+    { njs_str("Date.parse('2011-06-24T06:01:02.625555555Z')"),
+      njs_str("1308895262625") },
+
+    { njs_str("Date.parse('2011-06-24T06:01:02.62555555599999Z')"),
+      njs_str("1308895262625") },
+
     { njs_str("Date.parse('2011-06-24T06:01:02.625555Z5')"),
       njs_str("NaN") },
 
@@ -19934,19 +19944,19 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("(async function() {console.log('Number: ' + await 111)})"),
       njs_str("SyntaxError: await in arguments not supported in 1") },
 
-    { njs_str("function f(a) {}"
-              "(async function() {f(await 111)})"),
+    { njs_str("(async function() {f(await 111)})"),
+      njs_str("SyntaxError: await in arguments not supported in 1") },
+
+    { njs_str("(async function() {f(f(1), await 111)})"),
       njs_str("SyntaxError: await in arguments not supported in 1") },
 
     { njs_str("async () => [await x(1)(),]; async () => [await x(1)()]"),
       njs_str("[object AsyncFunction]") },
 
-    { njs_str("function f(a, b, c) {}"
-              "(async function() {f(1, 'a', await 111)})"),
+    { njs_str("(async function() {f(1, 'a', await 111)})"),
       njs_str("SyntaxError: await in arguments not supported in 1") },
 
-    { njs_str("function f(a) {}"
-              "(async function() {f('Number: ' + await 111)})"),
+    { njs_str("(async function() {f('Number: ' + await 111)})"),
       njs_str("SyntaxError: await in arguments not supported in 1") },
 
     { njs_str("async function f1() {try {f(await f1)} catch(e) {}}"),

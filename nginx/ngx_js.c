@@ -1542,12 +1542,6 @@ ngx_js_merge_vm(ngx_conf_t *cf, ngx_js_loc_conf_t *conf,
     ngx_array_t          *imports, *preload_objects, *paths;
     ngx_js_named_path_t  *import, *pi, *pij, *preload;
 
-    if (prev->imports != NGX_CONF_UNSET_PTR && prev->vm == NULL) {
-        if (init_vm(cf, (ngx_js_loc_conf_t *) prev) != NGX_OK) {
-            return NGX_ERROR;
-        }
-    }
-
     if (conf->imports == NGX_CONF_UNSET_PTR
         && conf->paths == NGX_CONF_UNSET_PTR
         && conf->preload_objects == NGX_CONF_UNSET_PTR)
@@ -1847,7 +1841,7 @@ ngx_js_module_read(njs_mp_t *mp, int fd, njs_str_t *text)
 
     text->length = sb.st_size;
 
-    text->start = njs_mp_alloc(mp, text->length);
+    text->start = njs_mp_alloc(mp, text->length + 1);
     if (text->start == NULL) {
         goto fail;
     }
@@ -1857,6 +1851,8 @@ ngx_js_module_read(njs_mp_t *mp, int fd, njs_str_t *text)
     if (n < 0 || n != sb.st_size) {
         goto fail;
     }
+
+    text->start[text->length] = '\0';
 
     return NJS_OK;
 

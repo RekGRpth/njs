@@ -18,7 +18,6 @@ njs_external_add(njs_vm_t *vm, njs_arr_t *protos,
     const njs_external_t *external, njs_uint_t n)
 {
     size_t                size;
-    ssize_t               length;
     njs_int_t             ret;
     njs_lvlhsh_t          *hash;
     const u_char          *start;
@@ -119,12 +118,8 @@ njs_external_add(njs_vm_t *vm, njs_arr_t *protos,
             } else {
                 start = (u_char *) external->u.property.value;
                 size = njs_strlen(start);
-                length = njs_utf8_length(start, size);
-                if (njs_slow_path(length < 0)) {
-                    length = 0;
-                }
 
-                ret = njs_string_new(vm, &prop->u.value, start, size, length);
+                ret = njs_string_create(vm, &prop->u.value, start, size);
                 if (njs_slow_path(ret != NJS_OK)) {
                     return NJS_ERROR;
                 }
@@ -236,11 +231,9 @@ njs_external_prop_handler(njs_vm_t *vm, njs_object_prop_t *self,
         return NJS_ERROR;
     }
 
-    if (slots != NULL) {
-        prop->writable = slots->writable;
-        prop->configurable = slots->configurable;
-        prop->enumerable = slots->enumerable;
-    }
+    prop->writable = self->writable;
+    prop->configurable = self->configurable;
+    prop->enumerable = self->enumerable;
 
     lhq.value = prop;
     njs_string_get(&self->name, &lhq.key);

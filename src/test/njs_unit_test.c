@@ -7450,6 +7450,9 @@ static njs_unit_test_t  njs_test[] =
               "[i.next(), i.next(), i.next(), i.next()].map((x) => x.value)"),
       njs_str("1,2,3,") },
 
+    { njs_str("[].values().constructor()"),
+      njs_str("[object Object]") },
+
     { njs_str("var a = [], i = a.values();"
               "a.push(1); a.push(2); a.push(3);"
               "[i.next(), i.next(), i.next(), i.next()].map((x) => x.value)"),
@@ -12884,6 +12887,9 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("var ex; try {({}) instanceof this} catch (e) {ex = e}; ex"),
       njs_str("TypeError: right argument is not callable") },
+
+    { njs_str("delete global.global; global"),
+      njs_str("ReferenceError: \"global\" is not defined") },
 
     { njs_str("njs"),
       njs_str("[object njs]") },
@@ -21819,6 +21825,11 @@ static njs_unit_test_t  njs_webcrypto_test[] =
     { njs_str("let buf = new Uint32Array(4);"
               "buf === crypto.getRandomValues(buf)"),
       njs_str("true") },
+
+    { njs_str("crypto.subtle;"
+              "var d = Object.getOwnPropertyDescriptor(crypto, 'subtle');"
+              "d.enumerable && !d.configurable && d.writable"),
+      njs_str("true") },
 };
 
 
@@ -22688,6 +22699,12 @@ static njs_unit_test_t  njs_shared_test[] =
     { njs_str("var v = Math.round(Math.random() * 1000); ExternalNull.set(v);"
               "ExternalNull.get() == v"),
       njs_str("true") },
+
+#if (NJS_HAVE_OPENSSL)
+    { njs_str("var cr = Object.entries(global).filter((v) => v[0] == 'crypto')[0][1];"
+              "cr.abc = 1; cr.abc"),
+      njs_str("1") },
+#endif
 };
 
 

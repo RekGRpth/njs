@@ -41,7 +41,7 @@ typedef struct {
 } qjs_module_t;
 
 
-JSContext *qjs_new_context(JSRuntime *rt, _Bool eval);
+JSContext *qjs_new_context(JSRuntime *rt, qjs_module_t **addons);
 
 
 JSValue qjs_buffer_alloc(JSContext *ctx, size_t size);
@@ -64,6 +64,7 @@ typedef struct {
 const qjs_buffer_encoding_t *qjs_buffer_encoding(JSContext *ctx,
     JSValueConst value, JS_BOOL thrw);
 
+int qjs_set_to_string_tag(JSContext *ctx, JSValueConst val, const char *tag);
 
 typedef struct {
     int                         tag;
@@ -75,6 +76,17 @@ int qjs_to_bytes(JSContext *ctx, qjs_bytes_t *data, JSValueConst value);
 void qjs_bytes_free(JSContext *ctx, qjs_bytes_t *data);
 JSValue qjs_typed_array_data(JSContext *ctx, JSValueConst value,
     njs_str_t *data);
+
+#define qjs_string_create(ctx, data, len)                                   \
+    JS_NewStringLen(ctx, (const char *) (data), len)
+JSValue qjs_string_create_chb(JSContext *cx, njs_chb_t *chain);
+
+
+static inline JS_BOOL JS_IsNullOrUndefined(JSValueConst v)
+{
+    return JS_VALUE_GET_TAG(v) == JS_TAG_NULL
+           || JS_VALUE_GET_TAG(v) == JS_TAG_UNDEFINED;
+}
 
 
 extern qjs_module_t              *qjs_modules[];

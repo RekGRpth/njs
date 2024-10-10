@@ -2117,10 +2117,6 @@ njs_buffer_prototype_index_of(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
 
     index = -1;
 
-    if (njs_slow_path(array->byte_length == 0)) {
-        goto done;
-    }
-
     length = array->byte_length;
 
     if (last) {
@@ -2145,30 +2141,11 @@ njs_buffer_prototype_index_of(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
             return ret;
         }
 
-        if (last) {
-            if (from >= 0) {
-                from = njs_min(from, length - 1);
-
-            } else if (from < 0) {
-                from += length;
-            }
-
-            if (from <= to) {
-                goto done;
-            }
+        if (from >= 0) {
+            from = njs_min(from, length);
 
         } else {
-            if (from < 0) {
-                from += length;
-
-                if (from < 0) {
-                    from = 0;
-                }
-            }
-
-            if (from >= to) {
-                goto done;
-            }
+            from = njs_max(0, length + from);
         }
     }
 
@@ -2213,22 +2190,24 @@ encoding:
             str.length = src->byte_length;
         }
 
-        if (njs_slow_path(str.length == 0)) {
-            index = (last) ? length : 0;
-            goto done;
-        }
-
-        if (str.length > (size_t) length) {
-            goto done;
-        }
-
         if (last) {
-            from -= str.length - 1;
-            from = njs_max(from, 0);
+            from = njs_min(from, length - (int64_t) str.length);
+
+            if (to > from) {
+                goto done;
+            }
 
         } else {
             to -= str.length - 1;
-            to = njs_min(to, length);
+
+            if (from > to) {
+                goto done;
+            }
+        }
+
+        if (from == to && str.length == 0) {
+            index = 0;
+            goto done;
         }
 
         for (i = from; i != to; i += increment) {
@@ -2242,6 +2221,10 @@ encoding:
 
     case NJS_NUMBER:
         byte = njs_number_to_uint32(njs_number(value));
+
+        if (last) {
+            from = njs_min(from, length - 1);
+        }
 
         for (i = from; i != to; i += increment) {
             if (u8[i] == byte) {

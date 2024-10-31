@@ -42,6 +42,7 @@ http {
     js_shared_dict_zone zone=bar:64k type=string;
     js_shared_dict_zone zone=waka:32k timeout=1000s type=number;
     js_shared_dict_zone zone=no_timeout:32k;
+    js_shared_dict_zone zone=overflow:32k;
 
     server {
         listen       127.0.0.1:8080;
@@ -101,6 +102,10 @@ http {
 
         location /name {
             js_content test.name;
+        }
+
+        location /overflow {
+            js_content test.overflow;
         }
 
         location /pop {
@@ -237,7 +242,8 @@ $t->write_file('test.js', <<'EOF');
             ks = ngx.shared[r.args.dict].keys();
         }
 
-        r.return(200, `[${ks.toSorted()}]`);
+        var sorted = ks.toSorted();
+        r.return(200, (sorted.length) ? sorted.join(",") : "empty");
     }
 
     function items(r) {
@@ -250,7 +256,7 @@ $t->write_file('test.js', <<'EOF');
             kvs = ngx.shared[r.args.dict].items();
         }
 
-        r.return(200, njs.dump(kvs.toSorted()));
+        r.return(200, kvs.toSorted().join("|"));
     }
 
     function name(r) {
@@ -261,6 +267,27 @@ $t->write_file('test.js', <<'EOF');
         var dict = ngx.shared[r.args.dict];
         var value = convertToValue(dict, r.args.value);
         r.return(200, dict.replace(r.args.key, value));
+    }
+
+    function overflow(r) {
+        var dict = ngx.shared.overflow;
+
+        var v = 'x'.repeat(1024);
+        try {
+            for (var i = 0; i < 1024; i++) {
+                dict.set('key' + i, v);
+            }
+        } catch (e) {
+            if (e instanceof SharedMemoryError) {
+                r.return(200, 'SharedMemoryError');
+                return;
+            }
+
+            r.return(200, e.toString());
+            return;
+        }
+
+        r.return(200, 'no exception');
     }
 
     function pop(r) {
@@ -310,14 +337,12 @@ $t->write_file('test.js', <<'EOF');
 
     export default { add, capacity, chain, clear, del, free_space, get, has,
                      incr, items, keys, name, njs: test_njs, pop, replace, set,
-                     set_clear, size, zones, engine };
+                     set_clear, size, zones, engine, overflow };
 EOF
 
 $t->try_run('no js_shared_dict_zone');
 
-plan(skip_all => 'not yet') if http_get('/engine') =~ /QuickJS$/m;
-
-$t->plan(51);
+$t->plan(52);
 
 ###############################################################################
 
@@ -350,8 +375,8 @@ like(http_get('/has?dict=waka&key=FOO'), qr/true/, 'has waka.FOO');
 
 $t->reload();
 
-like(http_get('/keys?dict=foo'), qr/\[FOO\,FOO2\,FOO3]/, 'foo keys');
-like(http_get('/keys?dict=foo&max=2'), qr/\[FOO\,FOO3]/, 'foo keys max 2');
+like(http_get('/keys?dict=foo'), qr/FOO\,FOO2\,FOO3/, 'foo keys');
+like(http_get('/keys?dict=foo&max=2'), qr/FOO\,FOO3/, 'foo keys max 2');
 like(http_get('/size?dict=foo'), qr/size: 3/, 'no of items in foo');
 like(http_get('/get?dict=foo&key=FOO2'), qr/yyy/, 'get foo.FOO2');
 like(http_get('/get?dict=bar&key=FOO'), qr/zzz/, 'get bar.FOO');
@@ -373,14 +398,14 @@ like(http_get('/pop?dict=foo&key=FOO'), qr/undefined/, 'pop expired foo.FOO');
 TODO: {
 local $TODO = 'not yet' unless has_version('0.8.1');
 
-like(http_get('/keys?dict=foo'), qr/\[]/, 'foo keys after expire');
-like(http_get('/keys?dict=bar'), qr/\[FOO\,FOO2]/, 'bar keys after a delay');
+like(http_get('/keys?dict=foo'), qr/empty/, 'foo keys after expire');
+like(http_get('/keys?dict=bar'), qr/FOO\,FOO2/, 'bar keys after a delay');
 like(http_get('/size?dict=foo'), qr/size: 0/,
 	'no of items in foo after expire');
-like(http_get('/items?dict=bar'), qr/\[\['FOO','zzz'],\['FOO2','aaa']]/,
+like(http_get('/items?dict=bar'), qr/FOO,zzz|FOO2,aaa/,
 	'bar items');
-like(http_get('/items?dict=waka'),
-	qr/\[\['FOO',47],\['FOO2',7779],\['FOO3',3338]]/, 'waka items');
+like(http_get('/items?dict=waka'), qr/FOO,47|FOO2,7779|FOO3,3338/,
+	'waka items');
 
 }
 
@@ -401,7 +426,7 @@ like(http_get('/add?dict=waka&key=FOO2&value=42&timeout=1000'), qr/true/,
 like(http_get('/incr?dict=waka&key=FOO3&by=42&timeout=1000'), qr/42/,
 	'incr waka.FOO3');
 
-like(http_get('/keys?dict=waka'), qr/\[FOO\,FOO2\,FOO3]/, 'waka keys');
+like(http_get('/keys?dict=waka'), qr/FOO\,FOO2\,FOO3/, 'waka keys');
 
 }
 
@@ -413,6 +438,13 @@ like(http_get('/clear?dict=foo'), qr/undefined/, 'clear foo');
 like(http_get('/size?dict=foo'), qr/size: 0/, 'no of items in foo after clear');
 like(http_get('/set_clear'), qr/size: 0/,
 	'no of items in no_timeout after clear');
+
+TODO: {
+local $TODO = 'not yet' unless has_version('0.8.8');
+
+like(http_get('/overflow'), qr/SharedMemoryError/, 'overflow exception');
+
+}
 
 ###############################################################################
 

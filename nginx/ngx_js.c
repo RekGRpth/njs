@@ -70,6 +70,7 @@ static ngx_int_t ngx_engine_qjs_pending(ngx_engine_t *engine);
 static ngx_int_t ngx_engine_qjs_string(ngx_engine_t *e,
     njs_opaque_value_t *value, ngx_str_t *str);
 
+static JSValue ngx_qjs_process_getter(JSContext *ctx, JSValueConst this_val);
 static JSValue ngx_qjs_ext_set_timeout(JSContext *cx, JSValueConst this_val,
     int argc, JSValueConst *argv, int immediate);
 static JSValue ngx_qjs_ext_clear_timeout(JSContext *cx, JSValueConst this_val,
@@ -457,6 +458,7 @@ static const JSCFunctionListEntry ngx_qjs_ext_console[] = {
 
 
 static const JSCFunctionListEntry ngx_qjs_ext_global[] = {
+    JS_CGETSET_DEF("process", ngx_qjs_process_getter, NULL),
     JS_CFUNC_MAGIC_DEF("setTimeout", 1, ngx_qjs_ext_set_timeout, 0),
     JS_CFUNC_MAGIC_DEF("setImmediate", 1, ngx_qjs_ext_set_timeout, 1),
     JS_CFUNC_DEF("clearTimeout", 1, ngx_qjs_ext_clear_timeout),
@@ -1563,6 +1565,13 @@ ngx_qjs_clear_timer(ngx_qjs_event_t *event)
     for (i = 0; i < (int) event->nargs; i++) {
         JS_FreeValue(cx, event->args[i]);
     }
+}
+
+
+static JSValue
+ngx_qjs_process_getter(JSContext *cx, JSValueConst this_val)
+{
+    return qjs_process_object(cx, ngx_argc, (const char **) ngx_argv);
 }
 
 
@@ -3822,6 +3831,10 @@ ngx_js_init_conf_vm(ngx_conf_t *cf, ngx_js_loc_conf_t *conf,
     ngx_uint_t            i;
     ngx_pool_cleanup_t   *cln;
     ngx_js_named_path_t  *import;
+
+    if (ngx_set_environment(cf->cycle, NULL) == NULL) {
+        return NGX_ERROR;
+    }
 
     if (conf->preload_objects != NGX_CONF_UNSET_PTR) {
        if (ngx_js_init_preload_vm(cf, (ngx_js_loc_conf_t *)conf) != NGX_OK) {

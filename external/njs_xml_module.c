@@ -1275,15 +1275,11 @@ njs_xml_node_tags_handler(njs_vm_t *vm, xmlNode *current, njs_str_t *name,
 
     /* set or delete. */
 
-    copy = xmlDocCopyNode(current, current->doc, 1);
+    copy = xmlDocCopyNode(current, current->doc,
+                          2 /* copy properties and namespaces */);
     if (njs_slow_path(copy == NULL)) {
         njs_vm_internal_error(vm, "xmlDocCopyNode() failed");
         return NJS_ERROR;
-    }
-
-    if (copy->children != NULL) {
-        xmlFreeNodeList(copy->children);
-        copy->children = NULL;
     }
 
     if (retval == NULL) {
@@ -1322,12 +1318,12 @@ njs_xml_node_tags_handler(njs_vm_t *vm, xmlNode *current, njs_str_t *name,
             xmlFreeNode(node);
             goto error;
         }
+    }
 
-        ret = xmlReconciliateNs(current->doc, copy);
-        if (njs_slow_path(ret == -1)) {
-            njs_vm_internal_error(vm, "xmlReconciliateNs() failed");
-            goto error;
-        }
+    ret = xmlReconciliateNs(current->doc, copy);
+    if (njs_slow_path(ret == -1)) {
+        njs_vm_internal_error(vm, "xmlReconciliateNs() failed");
+        goto error;
     }
 
     njs_value_undefined_set(retval);

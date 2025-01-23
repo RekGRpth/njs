@@ -90,8 +90,6 @@ static int qjs_hex_encode(JSContext *ctx, const njs_str_t *src, njs_str_t *dst);
 static size_t qjs_hex_encode_length(JSContext *ctx, const njs_str_t *src);
 static int qjs_hex_decode(JSContext *ctx, const njs_str_t *src, njs_str_t *dst);
 static size_t qjs_hex_decode_length(JSContext *ctx, const njs_str_t *src);
-static JSValue qjs_new_uint8_array(JSContext *ctx, int argc,
-    JSValueConst *argv);
 static JSModuleDef *qjs_buffer_init(JSContext *ctx, const char *name);
 
 
@@ -160,7 +158,7 @@ static const JSCFunctionListEntry qjs_buffer_props[] = {
     JS_CFUNC_MAGIC_DEF("allocUnsafe", 3, qjs_bufferobj_alloc, 1),
     JS_CFUNC_DEF("byteLength", 2, qjs_buffer_byte_length),
     JS_CFUNC_DEF("compare", 6, qjs_buffer_compare),
-    JS_CFUNC_DEF("concat", 1, qjs_buffer_concat),
+    JS_CFUNC_DEF("concat", 2, qjs_buffer_concat),
     JS_CFUNC_DEF("from", 3, qjs_buffer_from),
     JS_CFUNC_DEF("isBuffer", 1, qjs_buffer_is_buffer),
     JS_CFUNC_DEF("isEncoding", 1, qjs_buffer_is_encoding),
@@ -2465,7 +2463,7 @@ qjs_buffer_chb_alloc(JSContext *ctx, njs_chb_t *chain)
 }
 
 
-static JSValue
+JSValue
 qjs_new_uint8_array(JSContext *ctx, int argc, JSValueConst *argv)
 {
     JSValue  ret;

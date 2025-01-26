@@ -1141,6 +1141,9 @@ qjs_module_t *njs_http_qjs_addon_modules[] = {
      * Shared addons should be in the same order and the same positions
      * in all nginx modules.
      */
+#ifdef NJS_HAVE_OPENSSL
+    &qjs_webcrypto_module,
+#endif
 #ifdef NJS_HAVE_ZLIB
     &qjs_zlib_module,
 #endif
@@ -4848,7 +4851,7 @@ ngx_http_qjs_ext_args(JSContext *cx, JSValueConst this_val)
             return JS_EXCEPTION;
         }
 
-        val = qjs_string_create(cx, v + 1, p - v - 1);
+        val = qjs_string_create(cx, v + 1, (p == v) ? 0 : p - v - 1);
         if (JS_IsException(val)) {
             chain.free(cx, decoded.start);
             JS_FreeAtom(cx, key);

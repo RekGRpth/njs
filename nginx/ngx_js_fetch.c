@@ -2869,7 +2869,7 @@ ngx_js_http_parse_header_line(ngx_js_http_parse_t *hp, ngx_buf_t *b)
                 break;
             }
 
-            if (ch == '-') {
+            if (ch == '-' || ch == '_') {
                 break;
             }
 

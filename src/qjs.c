@@ -1015,6 +1015,8 @@ qjs_string_create_chb(JSContext *cx, njs_chb_t *chain)
     njs_str_t  str;
 
     ret = njs_chb_join(chain, &str);
+    njs_chb_destroy(chain);
+
     if (ret != NJS_OK) {
         return JS_ThrowInternalError(cx, "failed to create string");
     }
@@ -1024,4 +1026,120 @@ qjs_string_create_chb(JSContext *cx, njs_chb_t *chain)
     chain->free(cx, str.start);
 
     return val;
+}
+
+
+void
+qjs_free_prop_enum(JSContext *ctx, JSPropertyEnum *tab, uint32_t len)
+{
+    uint32_t  i;
+
+    for(i = 0; i < len; i++) {
+        JS_FreeAtom(ctx, tab[i].atom);
+    }
+
+    js_free(ctx, tab);
+}
+
+
+JSValue
+qjs_string_hex(JSContext *cx, const njs_str_t *src)
+{
+    JSValue    ret;
+    njs_str_t  dst;
+    u_char     buf[1024];
+
+    if (src->length == 0) {
+        return JS_NewStringLen(cx, "", 0);
+    }
+
+    dst.start = buf;
+    dst.length = qjs_hex_encode_length(cx, src);
+
+    if (dst.length <= sizeof(buf)) {
+        qjs_hex_encode(cx, src, &dst);
+        ret = JS_NewStringLen(cx, (const char *) dst.start, dst.length);
+
+    } else {
+        dst.start = js_malloc(cx, dst.length);
+        if (dst.start == NULL) {
+            return JS_ThrowOutOfMemory(cx);
+        }
+
+        qjs_hex_encode(cx, src, &dst);
+        ret = JS_NewStringLen(cx, (const char *) dst.start, dst.length);
+        js_free(cx, dst.start);
+    }
+
+    return ret;
+}
+
+
+JSValue
+qjs_string_base64(JSContext *cx, const njs_str_t *src)
+{
+    JSValue    ret;
+    njs_str_t  dst;
+    u_char     buf[1024];
+
+    if (src->length == 0) {
+        return JS_NewStringLen(cx, "", 0);
+    }
+
+    dst.start = buf;
+    dst.length = qjs_base64_encode_length(cx, src);
+
+    if (dst.length <= sizeof(buf)) {
+        qjs_base64_encode(cx, src, &dst);
+        ret = JS_NewStringLen(cx, (const char *) dst.start, dst.length);
+
+    } else {
+        dst.start = js_malloc(cx, dst.length);
+        if (dst.start == NULL) {
+            return JS_ThrowOutOfMemory(cx);
+        }
+
+        qjs_base64_encode(cx, src, &dst);
+        ret = JS_NewStringLen(cx, (const char *) dst.start, dst.length);
+        js_free(cx, dst.start);
+    }
+
+    return ret;
+}
+
+
+JSValue
+qjs_string_base64url(JSContext *cx, const njs_str_t *src)
+{
+    size_t     padding;
+    JSValue    ret;
+    njs_str_t  dst;
+    u_char     buf[1024];
+
+    if (src->length == 0) {
+        return JS_NewStringLen(cx, "", 0);
+    }
+
+    padding = src->length % 3;
+    padding = (4 >> padding) & 0x03;
+
+    dst.start = buf;
+    dst.length = qjs_base64_encode_length(cx, src) - padding;
+
+    if (dst.length <= sizeof(buf)) {
+        qjs_base64url_encode(cx, src, &dst);
+        ret = JS_NewStringLen(cx, (const char *) dst.start, dst.length);
+
+    } else {
+        dst.start = js_malloc(cx, dst.length);
+        if (dst.start == NULL) {
+            return JS_ThrowOutOfMemory(cx);
+        }
+
+        qjs_base64url_encode(cx, src, &dst);
+        ret = JS_NewStringLen(cx, (const char *) dst.start, dst.length);
+        js_free(cx, dst.start);
+    }
+
+    return ret;
 }

@@ -27,6 +27,10 @@
 
 #include <quickjs.h>
 
+#ifndef JS_BOOL
+#define JS_BOOL bool
+#endif
+
 #if defined(__GNUC__) && (__GNUC__ >= 8)
 #pragma GCC diagnostic pop
 #endif
@@ -44,7 +48,10 @@
 #define QJS_CORE_CLASS_ID_WEBCRYPTO_KEY (QJS_CORE_CLASS_ID_OFFSET + 7)
 #define QJS_CORE_CLASS_CRYPTO_HASH (QJS_CORE_CLASS_ID_OFFSET + 8)
 #define QJS_CORE_CLASS_CRYPTO_HMAC (QJS_CORE_CLASS_ID_OFFSET + 9)
-#define QJS_CORE_CLASS_ID_LAST      (QJS_CORE_CLASS_ID_OFFSET + 10)
+#define QJS_CORE_CLASS_ID_XML_DOC (QJS_CORE_CLASS_ID_OFFSET + 10)
+#define QJS_CORE_CLASS_ID_XML_NODE (QJS_CORE_CLASS_ID_OFFSET + 11)
+#define QJS_CORE_CLASS_ID_XML_ATTR (QJS_CORE_CLASS_ID_OFFSET + 12)
+#define QJS_CORE_CLASS_ID_LAST      (QJS_CORE_CLASS_ID_OFFSET + 13)
 
 
 typedef JSModuleDef *(*qjs_addon_init_pt)(JSContext *ctx, const char *name);
@@ -141,13 +148,17 @@ static inline JS_BOOL JS_IsNullOrUndefined(JSValueConst v)
            || JS_VALUE_GET_TAG(v) == JS_TAG_UNDEFINED;
 }
 
-
 #ifdef NJS_HAVE_QUICKJS_IS_SAME_VALUE
 #define qjs_is_same_value(cx, a, b) JS_IsSameValue(cx, a, b)
 #else
 #define qjs_is_same_value(cx, a, b) JS_SameValue(cx, a, b)
 #endif
 
+#ifdef NJS_HAVE_QUICKJS_IS_ARRAY_SINGLE_ARG
+#define qjs_is_array(cx, a) JS_IsArray(a)
+#else
+#define qjs_is_array(cx, a) JS_IsArray(cx, a)
+#endif
 
 extern qjs_module_t              *qjs_modules[];
 

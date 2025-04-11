@@ -157,17 +157,6 @@ struct ngx_js_http_s {
 };
 
 
-
-
-#define ngx_js_http_error(http, fmt, ...)                                     \
-    do {                                                                      \
-        njs_vm_error((http)->vm, fmt, ##__VA_ARGS__);                         \
-        njs_vm_exception_get((http)->vm,                                      \
-                             njs_value_arg(&(http)->response_value));         \
-        ngx_js_http_fetch_done(http, &(http)->response_value, NJS_ERROR);     \
-    } while (0)
-
-
 static njs_int_t ngx_js_method_process(njs_vm_t *vm, ngx_js_request_t *r);
 static njs_int_t ngx_js_headers_inherit(njs_vm_t *vm, ngx_js_headers_t *headers,
     ngx_js_headers_t *orig);
@@ -175,8 +164,12 @@ static njs_int_t ngx_js_headers_fill(njs_vm_t *vm, ngx_js_headers_t *headers,
     njs_value_t *init);
 static ngx_js_http_t *ngx_js_http_alloc(njs_vm_t *vm, ngx_pool_t *pool,
     ngx_log_t *log);
-static void njs_js_http_destructor(ngx_js_event_t *event);
-static void ngx_js_resolve_handler(ngx_resolver_ctx_t *ctx);
+static void ngx_js_http_resolve_done(ngx_js_http_t *http);
+static void ngx_js_http_close_peer(ngx_js_http_t *http);
+static void ngx_js_http_destructor(ngx_js_event_t *event);
+static ngx_resolver_ctx_t *ngx_js_http_resolve(ngx_js_http_t *http,
+    ngx_resolver_t *r, ngx_str_t *host, in_port_t port, ngx_msec_t timeout);
+static void ngx_js_http_resolve_handler(ngx_resolver_ctx_t *ctx);
 static njs_int_t ngx_js_fetch_promissified_result(njs_vm_t *vm,
     njs_value_t *result, njs_int_t rc, njs_value_t *retval);
 static void ngx_js_http_fetch_done(ngx_js_http_t *http,
@@ -842,7 +835,9 @@ ngx_js_ext_fetch(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     }
 
     if (u.addrs == NULL) {
-        ctx = ngx_resolve_start(ngx_external_resolver(vm, external), NULL);
+        ctx = ngx_js_http_resolve(http, ngx_external_resolver(vm, external),
+                                  &u.host, u.port,
+                                  ngx_external_resolver_timeout(vm, external));
         if (ctx == NULL) {
             njs_vm_memory_error(vm);
             return NJS_ERROR;
@@ -851,21 +846,6 @@ ngx_js_ext_fetch(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
         if (ctx == NGX_NO_RESOLVER) {
             njs_vm_error(vm, "no resolver defined");
             goto fail;
-        }
-
-        http->ctx = ctx;
-        http->port = u.port;
-
-        ctx->name = u.host;
-        ctx->handler = ngx_js_resolve_handler;
-        ctx->data = http;
-        ctx->timeout = ngx_external_resolver_timeout(vm, external);
-
-        ret = ngx_resolve_name(http->ctx);
-        if (ret != NGX_OK) {
-            http->ctx = NULL;
-            njs_vm_memory_error(vm);
-            return NJS_ERROR;
         }
 
         njs_value_assign(retval, njs_value_arg(&http->promise));
@@ -1311,7 +1291,7 @@ ngx_js_http_alloc(njs_vm_t *vm, ngx_pool_t *pool, ngx_log_t *log)
 
     event->ctx = vm;
     njs_value_function_set(njs_value_arg(&event->function), callback);
-    event->destructor = njs_js_http_destructor;
+    event->destructor = ngx_js_http_destructor;
     event->fd = ctx->event_id++;
     event->data = http;
 
@@ -1332,7 +1312,61 @@ failed:
 
 
 static void
-ngx_js_resolve_handler(ngx_resolver_ctx_t *ctx)
+ngx_js_http_error(ngx_js_http_t *http, const char *fmt, ...)
+{
+    u_char   *p, *end;
+    va_list   args;
+    u_char    err[NGX_MAX_ERROR_STR];
+
+    end = err + NGX_MAX_ERROR_STR - 1;
+
+    va_start(args, fmt);
+    p = njs_vsprintf(err, end, fmt, args);
+    *p = '\0';
+    va_end(args);
+
+    njs_vm_error(http->vm, (const char *) err);
+    njs_vm_exception_get(http->vm, njs_value_arg(&http->response_value));
+    ngx_js_http_fetch_done(http, &http->response_value, NJS_ERROR);
+}
+
+
+static ngx_resolver_ctx_t *
+ngx_js_http_resolve(ngx_js_http_t *http, ngx_resolver_t *r, ngx_str_t *host,
+    in_port_t port, ngx_msec_t timeout)
+{
+    ngx_int_t            ret;
+    ngx_resolver_ctx_t  *ctx;
+
+    ctx = ngx_resolve_start(r, NULL);
+    if (ctx == NULL) {
+        return NULL;
+    }
+
+    if (ctx == NGX_NO_RESOLVER) {
+        return ctx;
+    }
+
+    http->ctx = ctx;
+    http->port = port;
+
+    ctx->name = *host;
+    ctx->handler = ngx_js_http_resolve_handler;
+    ctx->data = http;
+    ctx->timeout = timeout;
+
+    ret = ngx_resolve_name(ctx);
+    if (ret != NGX_OK) {
+        http->ctx = NULL;
+        return NULL;
+    }
+
+    return ctx;
+}
+
+
+static void
+ngx_js_http_resolve_handler(ngx_resolver_ctx_t *ctx)
 {
     u_char           *p;
     size_t            len;
@@ -1402,8 +1436,7 @@ ngx_js_resolve_handler(ngx_resolver_ctx_t *ctx)
         http->addrs[i].name.data = p;
     }
 
-    ngx_resolve_name_done(ctx);
-    http->ctx = NULL;
+    ngx_js_http_resolve_done(http);
 
     ngx_js_http_connect(http);
 
@@ -1439,7 +1472,27 @@ ngx_js_http_close_connection(ngx_connection_t *c)
 
 
 static void
-njs_js_http_destructor(ngx_js_event_t *event)
+ngx_js_http_resolve_done(ngx_js_http_t *http)
+{
+    if (http->ctx != NULL) {
+        ngx_resolve_name_done(http->ctx);
+        http->ctx = NULL;
+    }
+}
+
+
+static void
+ngx_js_http_close_peer(ngx_js_http_t *http)
+{
+    if (http->peer.connection != NULL) {
+        ngx_js_http_close_connection(http->peer.connection);
+        http->peer.connection = NULL;
+    }
+}
+
+
+static void
+ngx_js_http_destructor(ngx_js_event_t *event)
 {
     ngx_js_http_t  *http;
 
@@ -1448,15 +1501,8 @@ njs_js_http_destructor(ngx_js_event_t *event)
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, http->log, 0, "js fetch destructor:%p",
                    http);
 
-    if (http->ctx != NULL) {
-        ngx_resolve_name_done(http->ctx);
-        http->ctx = NULL;
-    }
-
-    if (http->peer.connection != NULL) {
-        ngx_js_http_close_connection(http->peer.connection);
-        http->peer.connection = NULL;
-    }
+    ngx_js_http_resolve_done(http);
+    ngx_js_http_close_peer(http);
 }
 
 
@@ -1517,10 +1563,7 @@ ngx_js_http_fetch_done(ngx_js_http_t *http, njs_opaque_value_t *retval,
     ngx_log_debug2(NGX_LOG_DEBUG_EVENT, http->log, 0,
                    "js fetch done http:%p rc:%i", http, (ngx_int_t) rc);
 
-    if (http->peer.connection != NULL) {
-        ngx_js_http_close_connection(http->peer.connection);
-        http->peer.connection = NULL;
-    }
+    ngx_js_http_close_peer(http);
 
     if (http->event != NULL) {
         action = &http->promise_callbacks[(rc != NJS_OK)];

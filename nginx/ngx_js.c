@@ -441,6 +441,7 @@ static const JSCFunctionListEntry ngx_qjs_ext_ngx[] = {
     JS_CGETSET_MAGIC_DEF("ERR", ngx_qjs_ext_constant_integer, NULL,
                          NGX_LOG_ERR),
     JS_CGETSET_DEF("error_log_path", ngx_qjs_ext_error_log_path, NULL),
+    JS_CFUNC_DEF("fetch", 2, ngx_qjs_ext_fetch),
     JS_CGETSET_MAGIC_DEF("INFO", ngx_qjs_ext_constant_integer, NULL,
                          NGX_LOG_INFO),
     JS_CFUNC_MAGIC_DEF("log", 1, ngx_qjs_ext_log, 0),
@@ -2276,6 +2277,22 @@ ngx_js_string(njs_vm_t *vm, njs_value_t *value, njs_str_t *str)
         str->start = NULL;
         str->length = 0;
     }
+
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_js_ngx_string(njs_vm_t *vm, njs_value_t *value, ngx_str_t *str)
+{
+    njs_str_t  s;
+
+    if (ngx_js_string(vm, value, &s) != NGX_OK) {
+        return NGX_ERROR;
+    }
+
+    str->data = s.start;
+    str->len = s.length;
 
     return NGX_OK;
 }

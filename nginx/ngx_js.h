@@ -16,8 +16,6 @@
 #include <njs.h>
 #include <njs_rbtree.h>
 #include <njs_arr.h>
-#include "ngx_js_fetch.h"
-#include "ngx_js_shared_dict.h"
 
 #if (NJS_HAVE_QUICKJS)
 #include <qjs.h>
@@ -317,6 +315,9 @@ ngx_int_t ngx_js_exception(njs_vm_t *vm, ngx_str_t *s);
 ngx_engine_t *ngx_njs_clone(ngx_js_ctx_t *ctx, ngx_js_loc_conf_t *cf,
     void *external);
 
+#define NGX_CHB_CTX_INIT(chain, pool)                                        \
+    njs_chb_init(chain, pool, (njs_chb_alloc_t) ngx_palloc, NULL)
+
 #if (NJS_HAVE_QUICKJS)
 
 typedef struct ngx_qjs_event_s ngx_qjs_event_t;
@@ -436,5 +437,8 @@ extern njs_module_t  njs_webcrypto_module;
 extern njs_module_t  njs_xml_module;
 extern njs_module_t  njs_zlib_module;
 
+
+#include "ngx_js_fetch.h"
+#include "ngx_js_shared_dict.h"
 
 #endif /* _NGX_JS_H_INCLUDED_ */

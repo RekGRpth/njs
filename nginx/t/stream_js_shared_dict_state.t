@@ -3,7 +3,7 @@
 # (C) Dmitry Volyntsev
 # (C) Nginx, Inc.
 
-# Tests for js_shared_dict_zone directive.
+# Tests for js_shared_dict_zone directive, state= parameter.
 
 ###############################################################################
 
@@ -23,7 +23,7 @@ use Test::Nginx::Stream qw/ stream /;
 select STDERR; $| = 1;
 select STDOUT; $| = 1;
 
-my $t = Test::Nginx->new()->has(qw/http rewrite stream/)
+my $t = Test::Nginx->new()->has(qw/stream/)
 	->write_file_expand('nginx.conf', <<'EOF');
 
 %%TEST_GLOBALS%%
@@ -33,44 +33,27 @@ daemon off;
 events {
 }
 
-http {
-    %%TEST_GLOBALS_HTTP%%
-
-    server {
-        listen       127.0.0.1:8080;
-        server_name  localhost;
-
-        location / {
-            return 200;
-        }
-    }
-}
-
 stream {
     %%TEST_GLOBALS_STREAM%%
 
     js_import test.js;
 
-    js_shared_dict_zone zone=foo:32k;
+    js_shared_dict_zone zone=foo:32k state=foo.json;
 
     server {
         listen      127.0.0.1:8081;
         js_preread  test.preread_verify;
         proxy_pass  127.0.0.1:8090;
     }
-
-    server {
-        listen  127.0.0.1:8082;
-        js_preread  test.control_access;
-        proxy_pass  127.0.0.1:8080;
-    }
 }
 
 EOF
 
-$t->write_file('test.js', <<EOF);
-    import qs from 'querystring';
+$t->write_file('foo.json', <<EOF);
+{"QZ":{"value":"1"},"QQ":{"value":"1"}}
+EOF
 
+$t->write_file('test.js', <<EOF);
     function preread_verify(s) {
         var collect = Buffer.from([]);
 
@@ -88,58 +71,22 @@ $t->write_file('test.js', <<EOF);
         });
     }
 
-    function control_access(s) {
-        var req = '';
-
-        s.on('upload', function(data, flags) {
-            req += data;
-
-            var n = req.search('\\n');
-            if (n != -1) {
-                var params = req.substr(0, n).split(' ')[1].split('?')[1];
-
-                var args = qs.parse(params);
-                switch (args.action) {
-                case 'set':
-                    ngx.shared.foo.set(args.key, args.value);
-                    break;
-                case 'del':
-                    ngx.shared.foo.delete(args.key);
-                    break;
-                }
-
-                s.done();
-            }
-        });
-    }
-
-    export default { preread_verify, control_access };
+    export default { preread_verify };
 
 EOF
 
-$t->try_run('no js_shared_dict_zone');
+$t->try_run('no js_shared_dict_zone with state=');
 
-$t->plan(9);
+$t->plan(2);
 
 $t->run_daemon(\&stream_daemon, port(8090));
 $t->waitforsocket('127.0.0.1:' . port(8090));
 
 ###############################################################################
 
-is(stream('127.0.0.1:' . port(8081))->io("\xAB\xCDQZ##"), "",
-	'access failed, QZ is not in the shared dict');
-is(stream('127.0.0.1:' . port(8081))->io("\xAB\xCDQQ##"), "",
-	'access failed, QQ is not in the shared dict');
-like(get('/?action=set&key=QZ&value=1'), qr/200/, 'set foo.QZ');
+is(stream('127.0.0.1:' . port(8081))->io("\xAB\xCDQY##"), "",
+	'access failed, QY is not in the shared dict');
 is(stream('127.0.0.1:' . port(8081))->io("\xAB\xCDQZ##"), "\xAB\xCDQZ##",
-	'access granted');
-is(stream('127.0.0.1:' . port(8081))->io("\xAB\xCDQQ##"), "",
-	'access failed, QQ is not in the shared dict');
-like(get('/?action=del&key=QZ'), qr/200/, 'del foo.QZ');
-like(get('/?action=set&key=QQ&value=1'), qr/200/, 'set foo.QQ');
-is(stream('127.0.0.1:' . port(8081))->io("\xAB\xCDQZ##"), "",
-	'access failed, QZ is not in the shared dict');
-is(stream('127.0.0.1:' . port(8081))->io("\xAB\xCDQQ##"), "\xAB\xCDQQ##",
 	'access granted');
 
 ###############################################################################

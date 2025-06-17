@@ -394,6 +394,19 @@ njs_function_lambda_frame(njs_vm_t *vm, njs_function_t *function,
 
     lambda = function->u.lambda;
 
+    /*
+     * Lambda frame has the following layout:
+     *  njs_frame_t | p0 , p2, ..., pn | v0, v1, ..., vn
+     *  where:
+     *  p0, p1, ..., pn - pointers to arguments and locals,
+     *  v0, v1, ..., vn - values of arguments and locals.
+     *  n - number of arguments + locals.
+     *
+     *  Normally, the pointers point to the values directly after them,
+     *  but if a value was captured as a closure by an inner function,
+     *  pn points to a value allocated from the heap.
+     */
+
     args_count = njs_max(nargs, lambda->nargs);
     value_count = args_count + lambda->nlocal;
 
@@ -523,7 +536,6 @@ njs_function_lambda_call(njs_vm_t *vm, njs_value_t *retval, void *promise_cap)
     njs_value_t            *args, **local, *value;
     njs_value_t            **cur_local, **cur_closures;
     njs_function_t         *function;
-    njs_declaration_t      *declr;
     njs_function_lambda_t  *lambda;
 
     frame = (njs_frame_t *) vm->top_frame;
@@ -581,29 +593,6 @@ njs_function_lambda_call(njs_vm_t *vm, njs_value_t *retval, void *promise_cap)
     }
 
     vm->active_frame = frame;
-
-    /* Closures */
-
-    n = lambda->ndeclarations;
-
-    while (n != 0) {
-        n--;
-
-        declr = &lambda->declarations[n];
-        value = njs_scope_value(vm, declr->index);
-
-        *value = *declr->value;
-
-        function = njs_function_value_copy(vm, value);
-        if (njs_slow_path(function == NULL)) {
-            return NJS_ERROR;
-        }
-
-        ret = njs_function_capture_closure(vm, function, function->u.lambda);
-        if (njs_slow_path(ret != NJS_OK)) {
-            return ret;
-        }
-    }
 
     ret = njs_vmcode_interpreter(vm, lambda->start, retval, promise_cap, NULL);
 
@@ -699,11 +688,11 @@ njs_function_frame_free(njs_vm_t *vm, njs_native_frame_t *native)
 njs_int_t
 njs_function_frame_save(njs_vm_t *vm, njs_frame_t *frame, u_char *pc)
 {
-    size_t              args_count, value_count, n;
-    njs_value_t         *start, *end, *p, **new, *value, **local;
-    njs_function_t      *function;
+    size_t                 args_count, value_count, n;
+    njs_value_t            **map, *value, **current_map;
+    njs_function_t         *function;
+    njs_native_frame_t     *active, *native;
     njs_function_lambda_t  *lambda;
-    njs_native_frame_t  *active, *native;
 
     *frame = *vm->active_frame;
 
@@ -721,33 +710,36 @@ njs_function_frame_save(njs_vm_t *vm, njs_frame_t *frame, u_char *pc)
     args_count = njs_max(native->nargs, lambda->nargs);
     value_count = args_count + lambda->nlocal;
 
-    new = (njs_value_t **) ((u_char *) native + NJS_FRAME_SIZE);
-    value = (njs_value_t *) (new + value_count);
+    /*
+     * We need to save the current frame state because it will be freed
+     * when the function returns.
+     *
+     *  To detect whether a value is captured as a closure,
+     *  we check whether the pointer is within the frame. In this case
+     *  the pointer is copied as is because the value it points to
+     *  is already allocated in the heap and will not be freed.
+     *  See njs_function_capture_closure() and njs_function_lambda_frame()
+     *  for details.
+     */
+
+    map = (njs_value_t **) ((u_char *) native + NJS_FRAME_SIZE);
+    value = (njs_value_t *) (map + value_count);
+
+    current_map = (njs_value_t **) ((u_char *) active + NJS_FRAME_SIZE);
+
+    for (n = 0; n < value_count; n++) {
+        if (njs_is_value_allocated_on_frame(active, current_map[n])) {
+            map[n] = &value[n];
+            njs_value_assign(&value[n], current_map[n]);
+
+        } else {
+            map[n] = current_map[n];
+        }
+    }
 
     native->arguments = value;
-    native->local = new + njs_function_frame_args_count(active);
+    native->local = map + args_count;
     native->pc = pc;
-
-    start = njs_function_frame_values(active, &end);
-    p = native->arguments;
-
-    while (start < end) {
-        njs_value_assign(p, start++);
-        *new++ = p++;
-    }
-
-    /* Move all arguments. */
-
-    p = native->arguments;
-    local = native->local + 1 /* this */;
-
-    for (n = 0; n < function->args_count; n++) {
-        if (!njs_is_valid(p)) {
-            njs_set_undefined(p);
-        }
-
-        *local++ = p++;
-    }
 
     return NJS_OK;
 }
@@ -770,7 +762,6 @@ njs_int_t
 njs_function_capture_closure(njs_vm_t *vm, njs_function_t *function,
     njs_function_lambda_t *lambda)
 {
-    void                *start, *end;
     uint32_t            n;
     njs_value_t         *value, **closure;
     njs_native_frame_t  *frame;
@@ -785,9 +776,6 @@ njs_function_capture_closure(njs_vm_t *vm, njs_function_t *function,
         frame = frame->previous;
     }
 
-    start = frame;
-    end = frame->free;
-
     closure = njs_function_closures(function);
     n = lambda->nclosures;
 
@@ -796,7 +784,7 @@ njs_function_capture_closure(njs_vm_t *vm, njs_function_t *function,
 
         value = njs_scope_value(vm, lambda->closures[n]);
 
-        if (start <= (void *) value && (void *) value < end) {
+        if (njs_is_value_allocated_on_frame(frame, value)) {
             value = njs_scope_value_clone(vm, lambda->closures[n], value);
             if (njs_slow_path(value == NULL)) {
                 return NJS_ERROR;
@@ -812,14 +800,14 @@ njs_function_capture_closure(njs_vm_t *vm, njs_function_t *function,
 
 
 njs_inline njs_value_t *
-njs_function_closure_value(njs_vm_t *vm, njs_value_t **scope, njs_index_t index,
-    void *start, void *end)
+njs_function_closure_value(njs_vm_t *vm, njs_native_frame_t *frame,
+    njs_value_t **scope, njs_index_t index)
 {
     njs_value_t  *value, *newval;
 
     value = scope[njs_scope_index_value(index)];
 
-    if (start <= (void *) value && end > (void *) value) {
+    if (njs_is_value_allocated_on_frame(frame, value)) {
         newval = njs_mp_alloc(vm->mem_pool, sizeof(njs_value_t));
         if (njs_slow_path(newval == NULL)) {
             njs_memory_error(vm);
@@ -839,7 +827,6 @@ njs_function_closure_value(njs_vm_t *vm, njs_value_t **scope, njs_index_t index,
 njs_int_t
 njs_function_capture_global_closures(njs_vm_t *vm, njs_function_t *function)
 {
-    void                   *start, *end;
     uint32_t               n;
     njs_value_t            *value, **refs, **global;
     njs_index_t            *indexes, index;
@@ -858,9 +845,6 @@ njs_function_capture_global_closures(njs_vm_t *vm, njs_function_t *function)
         native = native->previous;
     }
 
-    start = native;
-    end = native->free;
-
     indexes = lambda->closures;
     refs = njs_function_closures(function);
 
@@ -875,12 +859,12 @@ njs_function_capture_global_closures(njs_vm_t *vm, njs_function_t *function)
 
         switch (njs_scope_index_type(index)) {
         case NJS_LEVEL_LOCAL:
-            value = njs_function_closure_value(vm, native->local, index,
-                                               start, end);
+            value = njs_function_closure_value(vm, native, native->local,
+                                               index);
             break;
 
         case NJS_LEVEL_GLOBAL:
-            value = njs_function_closure_value(vm, global, index, start, end);
+            value = njs_function_closure_value(vm, native, global, index);
             break;
 
         default:
@@ -950,9 +934,8 @@ njs_function_prototype_create(njs_vm_t *vm, njs_object_prop_t *prop,
     uint32_t unused, njs_value_t *value, njs_value_t *setval,
     njs_value_t *retval)
 {
-    njs_value_t     *proto, proto_value, *cons;
-    njs_object_t    *prototype;
-    njs_function_t  *function;
+    njs_value_t   *proto, proto_value, *cons;
+    njs_object_t  *prototype;
 
     if (setval == NULL) {
         prototype = njs_object_alloc(vm);
@@ -963,11 +946,6 @@ njs_function_prototype_create(njs_vm_t *vm, njs_object_prop_t *prop,
         njs_set_object(&proto_value, prototype);
 
         setval = &proto_value;
-    }
-
-    function = njs_function_value_copy(vm, value);
-    if (njs_slow_path(function == NULL)) {
-        return NJS_ERROR;
     }
 
     proto = njs_function_property_prototype_set(vm, njs_object_hash(value),

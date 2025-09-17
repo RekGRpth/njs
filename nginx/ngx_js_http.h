@@ -11,17 +11,20 @@
 #define _NGX_JS_HTTP_H_INCLUDED_
 
 
-typedef struct ngx_js_http_s  ngx_js_http_t;
+#define NGX_JS_HOST_MAX_LEN        256
 
+
+typedef struct ngx_js_http_s  ngx_js_http_t;
 
 typedef struct {
     ngx_uint_t                     state;
+    unsigned                       http_major:16;
+    unsigned                       http_minor:16;
+    ngx_uint_t                     http_version;
     ngx_uint_t                     code;
     u_char                        *status_text;
     u_char                        *status_text_end;
     ngx_uint_t                     count;
-    ngx_flag_t                     chunked;
-    off_t                          content_length_n;
 
     u_char                        *header_name_start;
     u_char                        *header_name_end;
@@ -111,18 +114,22 @@ struct ngx_js_http_s {
     ngx_addr_t                    *addrs;
     ngx_uint_t                     naddrs;
     ngx_uint_t                     naddr;
+    ngx_str_t                      host;
     in_port_t                      port;
 
     ngx_peer_connection_t          peer;
-    ngx_msec_t                     timeout;
 
+    ngx_js_loc_conf_t             *conf;
     ngx_int_t                      buffer_size;
     ngx_int_t                      max_response_body_size;
 
     unsigned                       header_only;
 
+    ngx_flag_t                     chunked;
+    ngx_flag_t                     keepalive;
+    off_t                          content_length_n;
+
 #if (NGX_SSL)
-    ngx_str_t                      tls_name;
     ngx_ssl_t                     *ssl;
     njs_bool_t                     ssl_verify;
 #endif

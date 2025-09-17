@@ -358,10 +358,8 @@ static void ngx_http_qjs_periodic_finalizer(JSRuntime *rt, JSValue val);
 static ngx_pool_t *ngx_http_js_pool(ngx_http_request_t *r);
 static ngx_resolver_t *ngx_http_js_resolver(ngx_http_request_t *r);
 static ngx_msec_t ngx_http_js_resolver_timeout(ngx_http_request_t *r);
-static ngx_msec_t ngx_http_js_fetch_timeout(ngx_http_request_t *r);
-static size_t ngx_http_js_buffer_size(ngx_http_request_t *r);
-static size_t ngx_http_js_max_response_buffer_size(ngx_http_request_t *r);
 static void ngx_http_js_event_finalize(ngx_http_request_t *r, ngx_int_t rc);
+static ngx_js_loc_conf_t *ngx_http_js_loc_conf(ngx_http_request_t *r);
 static ngx_js_ctx_t *ngx_http_js_ctx(ngx_http_request_t *r);
 
 static void ngx_http_js_periodic_handler(ngx_event_t *ev);
@@ -390,9 +388,6 @@ static void *ngx_http_js_create_main_conf(ngx_conf_t *cf);
 static void *ngx_http_js_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_js_merge_loc_conf(ngx_conf_t *cf, void *parent,
     void *child);
-
-static ngx_ssl_t *ngx_http_js_ssl(ngx_http_request_t *r);
-static ngx_flag_t ngx_http_js_ssl_verify(ngx_http_request_t *r);
 
 static ngx_int_t ngx_http_js_parse_unsafe_uri(ngx_http_request_t *r,
     njs_str_t *uri, njs_str_t *args);
@@ -568,6 +563,34 @@ static ngx_command_t  ngx_http_js_commands[] = {
       ngx_http_js_shared_dict_zone,
       0,
       0,
+      NULL },
+
+    { ngx_string("js_fetch_keepalive"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_js_loc_conf_t, fetch_keepalive),
+      NULL },
+
+    { ngx_string("js_fetch_keepalive_requests"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_js_loc_conf_t, fetch_keepalive_requests),
+      NULL },
+
+    { ngx_string("js_fetch_keepalive_time"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_msec_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_js_loc_conf_t, fetch_keepalive_time),
+      NULL },
+
+    { ngx_string("js_fetch_keepalive_timeout"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_msec_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_js_loc_conf_t, fetch_keepalive_timeout),
       NULL },
 
       ngx_null_command
@@ -972,13 +995,9 @@ static uintptr_t ngx_http_js_uptr[] = {
     (uintptr_t) ngx_http_js_resolver,
     (uintptr_t) ngx_http_js_resolver_timeout,
     (uintptr_t) ngx_http_js_event_finalize,
-    (uintptr_t) ngx_http_js_ssl,
-    (uintptr_t) ngx_http_js_ssl_verify,
-    (uintptr_t) ngx_http_js_fetch_timeout,
-    (uintptr_t) ngx_http_js_buffer_size,
-    (uintptr_t) ngx_http_js_max_response_buffer_size,
-    (uintptr_t) 0 /* main_conf ptr */,
+    (uintptr_t) ngx_http_js_loc_conf,
     (uintptr_t) ngx_http_js_ctx,
+    (uintptr_t) 0 /* main_conf ptr */,
 };
 
 
@@ -4666,39 +4685,6 @@ ngx_http_js_resolver_timeout(ngx_http_request_t *r)
 }
 
 
-static ngx_msec_t
-ngx_http_js_fetch_timeout(ngx_http_request_t *r)
-{
-    ngx_http_js_loc_conf_t  *jlcf;
-
-    jlcf = ngx_http_get_module_loc_conf(r, ngx_http_js_module);
-
-    return jlcf->timeout;
-}
-
-
-static size_t
-ngx_http_js_buffer_size(ngx_http_request_t *r)
-{
-    ngx_http_js_loc_conf_t  *jlcf;
-
-    jlcf = ngx_http_get_module_loc_conf(r, ngx_http_js_module);
-
-    return jlcf->buffer_size;
-}
-
-
-static size_t
-ngx_http_js_max_response_buffer_size(ngx_http_request_t *r)
-{
-    ngx_http_js_loc_conf_t  *jlcf;
-
-    jlcf = ngx_http_get_module_loc_conf(r, ngx_http_js_module);
-
-    return jlcf->max_response_body_size;
-}
-
-
 static void
 ngx_http_js_event_finalize(ngx_http_request_t *r, ngx_int_t rc)
 {
@@ -4718,6 +4704,13 @@ ngx_http_js_event_finalize(ngx_http_request_t *r, ngx_int_t rc)
     if (rc == NGX_OK) {
         ngx_post_event(r->connection->write, &ngx_posted_events);
     }
+}
+
+
+static ngx_js_loc_conf_t *
+ngx_http_js_loc_conf(ngx_http_request_t *r)
+{
+    return ngx_http_get_module_loc_conf(r, ngx_http_js_module);
 }
 
 
@@ -7724,7 +7717,7 @@ ngx_http_js_init_conf_vm(ngx_conf_t *cf, ngx_js_loc_conf_t *conf)
     options.engine = conf->type;
 
     jmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_js_module);
-    ngx_http_js_uptr[NGX_JS_MAIN_CONF_INDEX] = (uintptr_t) jmcf;
+    ngx_http_js_uptr[NGX_JS_EXTERNAL_MAIN_CONF] = (uintptr_t) jmcf;
 
     if (conf->type == NGX_ENGINE_NJS) {
         options.u.njs.metas = &ngx_http_js_metas;
@@ -8233,36 +8226,6 @@ ngx_http_js_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     }
 
     return NGX_CONF_OK;
-}
-
-
-static ngx_ssl_t *
-ngx_http_js_ssl(ngx_http_request_t *r)
-{
-#if (NGX_HTTP_SSL)
-    ngx_http_js_loc_conf_t  *jlcf;
-
-    jlcf = ngx_http_get_module_loc_conf(r, ngx_http_js_module);
-
-    return jlcf->ssl;
-#else
-    return NULL;
-#endif
-}
-
-
-static ngx_flag_t
-ngx_http_js_ssl_verify(ngx_http_request_t *r)
-{
-#if (NGX_HTTP_SSL)
-    ngx_http_js_loc_conf_t  *jlcf;
-
-    jlcf = ngx_http_get_module_loc_conf(r, ngx_http_js_module);
-
-    return jlcf->ssl_verify;
-#else
-    return 0;
-#endif
 }
 
 

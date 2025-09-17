@@ -7,10 +7,6 @@
  */
 
 
-#include <ngx_config.h>
-#include <ngx_core.h>
-#include <ngx_event.h>
-#include <ngx_event_connect.h>
 #include "ngx_js.h"
 #include "ngx_js_http.h"
 
@@ -40,7 +36,7 @@ static njs_int_t ngx_js_headers_inherit(njs_vm_t *vm, ngx_js_headers_t *headers,
 static njs_int_t ngx_js_headers_fill(njs_vm_t *vm, ngx_js_headers_t *headers,
     njs_value_t *init);
 static ngx_js_fetch_t *ngx_js_fetch_alloc(njs_vm_t *vm, ngx_pool_t *pool,
-    ngx_log_t *log);
+    ngx_log_t *log, ngx_js_loc_conf_t *conf);
 static void ngx_js_fetch_error(ngx_js_http_t *http, const char *err);
 static void ngx_js_fetch_destructor(ngx_js_event_t *event);
 static njs_int_t ngx_js_fetch_promissified_result(njs_vm_t *vm,
@@ -537,7 +533,8 @@ ngx_js_ext_fetch(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     c = ngx_external_connection(vm, external);
     pool = ngx_external_pool(vm, external);
 
-    fetch = ngx_js_fetch_alloc(vm, pool, c->log);
+    fetch = ngx_js_fetch_alloc(vm, pool, c->log,
+                               ngx_external_loc_conf(vm, external));
     if (fetch == NULL) {
         return NJS_ERROR;
     }
@@ -549,16 +546,21 @@ ngx_js_ext_fetch(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
         goto fail;
     }
 
+    if (u.host.len >= NGX_JS_HOST_MAX_LEN) {
+        njs_vm_error(vm, "Host name too long");
+        goto fail;
+    }
+
+    http->host = u.host;
+    http->port = u.port;
     http->response.url = request.url;
-    http->timeout = ngx_external_fetch_timeout(vm, external);
-    http->buffer_size = ngx_external_buffer_size(vm, external);
-    http->max_response_body_size =
-                           ngx_external_max_response_buffer_size(vm, external);
+    http->buffer_size = http->conf->buffer_size;
+    http->max_response_body_size = http->conf->max_response_body_size;
 
 #if (NGX_SSL)
     if (u.default_port == 443) {
-        http->ssl = ngx_external_ssl(vm, external);
-        http->ssl_verify = ngx_external_ssl_verify(vm, external);
+        http->ssl = http->conf->ssl;
+        http->ssl_verify = http->conf->ssl_verify;
     }
 #endif
 
@@ -682,18 +684,22 @@ ngx_js_ext_fetch(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
             continue;
         }
 
+        if (h[i].key.len == 10
+            && ngx_strncasecmp(h[i].key.data, (u_char *) "Connection", 10)
+            == 0)
+        {
+            continue;
+        }
+
         njs_chb_append(&http->chain, h[i].key.data, h[i].key.len);
         njs_chb_append_literal(&http->chain, ": ");
         njs_chb_append(&http->chain, h[i].value.data, h[i].value.len);
         njs_chb_append_literal(&http->chain, CRLF);
     }
 
-    njs_chb_append_literal(&http->chain, "Connection: close" CRLF);
-
-#if (NGX_SSL)
-    http->tls_name.data = u.host.data;
-    http->tls_name.len = u.host.len;
-#endif
+    if (!http->keepalive) {
+        njs_chb_append_literal(&http->chain, "Connection: close" CRLF);
+    }
 
     if (request.body.len != 0) {
         njs_chb_sprintf(&http->chain, 32, "Content-Length: %uz" CRLF CRLF,
@@ -1134,7 +1140,8 @@ ngx_js_headers_fill(njs_vm_t *vm, ngx_js_headers_t *headers, njs_value_t *init)
 
 
 static ngx_js_fetch_t *
-ngx_js_fetch_alloc(njs_vm_t *vm, ngx_pool_t *pool, ngx_log_t *log)
+ngx_js_fetch_alloc(njs_vm_t *vm, ngx_pool_t *pool, ngx_log_t *log,
+    ngx_js_loc_conf_t *conf)
 {
     njs_int_t        ret;
     ngx_js_ctx_t    *ctx;
@@ -1152,10 +1159,10 @@ ngx_js_fetch_alloc(njs_vm_t *vm, ngx_pool_t *pool, ngx_log_t *log)
 
     http->pool = pool;
     http->log = log;
+    http->conf = conf;
 
-    http->timeout = 10000;
-
-    http->http_parse.content_length_n = -1;
+    http->content_length_n = -1;
+    http->keepalive = (conf->fetch_keepalive > 0);
 
     http->append_headers = ngx_js_fetch_append_headers;
     http->ready_handler = ngx_js_fetch_process_done;

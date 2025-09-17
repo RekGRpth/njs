@@ -5,10 +5,6 @@
  */
 
 
-#include <ngx_config.h>
-#include <ngx_core.h>
-#include <ngx_event.h>
-#include <ngx_event_connect.h>
 #include "ngx_js.h"
 #include "ngx_js_http.h"
 
@@ -39,7 +35,7 @@ static ngx_int_t ngx_qjs_headers_inherit(JSContext *cx,
 static ngx_int_t ngx_qjs_headers_fill(JSContext *cx, ngx_js_headers_t *headers,
     JSValue init);
 static ngx_qjs_fetch_t *ngx_qjs_fetch_alloc(JSContext *cx, ngx_pool_t *pool,
-    ngx_log_t *log);
+    ngx_log_t *log, ngx_js_loc_conf_t *conf);
 static void ngx_qjs_fetch_error(ngx_js_http_t *http, const char *err);
 static void ngx_qjs_fetch_destructor(ngx_qjs_event_t *event);
 static void ngx_qjs_fetch_done(ngx_qjs_fetch_t *fetch, JSValue retval,
@@ -257,7 +253,8 @@ ngx_qjs_ext_fetch(JSContext *cx, JSValueConst this_val, int argc,
     c = ngx_qjs_external_connection(cx, external);
     pool = ngx_qjs_external_pool(cx, external);
 
-    fetch = ngx_qjs_fetch_alloc(cx, pool, c->log);
+    fetch = ngx_qjs_fetch_alloc(cx, pool, c->log,
+                                ngx_qjs_external_loc_conf(cx, external));
     if (fetch == NULL) {
         return JS_ThrowOutOfMemory(cx);
     }
@@ -269,9 +266,15 @@ ngx_qjs_ext_fetch(JSContext *cx, JSValueConst this_val, int argc,
         goto fail;
     }
 
+    if (u.host.len >= NGX_JS_HOST_MAX_LEN) {
+        JS_ThrowInternalError(cx, "Host name too long");
+        goto fail;
+    }
+
     http = &fetch->http;
+    http->host = u.host;
+    http->port = u.port;
     http->response.url = request.url;
-    http->timeout = ngx_qjs_external_fetch_timeout(cx, external);
     http->buffer_size = ngx_qjs_external_buffer_size(cx, external);
     http->max_response_body_size =
                         ngx_qjs_external_max_response_buffer_size(cx, external);
@@ -418,18 +421,22 @@ ngx_qjs_ext_fetch(JSContext *cx, JSValueConst this_val, int argc,
             continue;
         }
 
+        if (h[i].key.len == 10
+            && ngx_strncasecmp(h[i].key.data, (u_char *) "Connection", 10)
+               == 0)
+        {
+            continue;
+        }
+
         njs_chb_append(&http->chain, h[i].key.data, h[i].key.len);
         njs_chb_append_literal(&http->chain, ": ");
         njs_chb_append(&http->chain, h[i].value.data, h[i].value.len);
         njs_chb_append_literal(&http->chain, CRLF);
     }
 
-    njs_chb_append_literal(&http->chain, "Connection: close" CRLF);
-
-#if (NGX_SSL)
-    http->tls_name.data = u.host.data;
-    http->tls_name.len = u.host.len;
-#endif
+    if (!http->keepalive) {
+        njs_chb_append_literal(&http->chain, "Connection: close" CRLF);
+    }
 
     if (request.body.len != 0) {
         njs_chb_sprintf(&http->chain, 32, "Content-Length: %uz" CRLF CRLF,
@@ -1193,7 +1200,8 @@ fail:
 
 
 static ngx_qjs_fetch_t *
-ngx_qjs_fetch_alloc(JSContext *cx, ngx_pool_t *pool, ngx_log_t *log)
+ngx_qjs_fetch_alloc(JSContext *cx, ngx_pool_t *pool, ngx_log_t *log,
+    ngx_js_loc_conf_t *conf)
 {
     ngx_js_ctx_t     *ctx;
     ngx_js_http_t    *http;
@@ -1210,9 +1218,10 @@ ngx_qjs_fetch_alloc(JSContext *cx, ngx_pool_t *pool, ngx_log_t *log)
     http->pool = pool;
     http->log = log;
 
-    http->timeout = 10000;
+    http->conf = conf;
 
-    http->http_parse.content_length_n = -1;
+    http->content_length_n = -1;
+    http->keepalive = (conf->fetch_keepalive > 0);
 
     ngx_qjs_arg(http->response.header_value) = JS_UNDEFINED;
 

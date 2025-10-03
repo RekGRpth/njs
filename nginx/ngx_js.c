@@ -557,10 +557,16 @@ ngx_engine_njs_init(ngx_engine_t *engine, ngx_engine_opts_t *opts)
     vm_options.backtrace = 1;
     vm_options.addons = opts->u.njs.addons;
     vm_options.metas = opts->u.njs.metas;
-    vm_options.file = opts->file;
     vm_options.argv = ngx_argv;
     vm_options.argc = ngx_argc;
     vm_options.init = 1;
+
+    vm_options.file.start = njs_mp_alloc(engine->pool, opts->file.length);
+    if (vm_options.file.start == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_memcpy(vm_options.file.start, opts->file.start, opts->file.length);
 
     vm = njs_vm_create(&vm_options);
     if (vm == NULL) {
@@ -571,6 +577,7 @@ ngx_engine_njs_init(ngx_engine_t *engine, ngx_engine_opts_t *opts)
 
     rc = ngx_js_set_cwd(njs_vm_memory_pool(vm), opts->conf, &vm_options.file);
     if (rc != NGX_OK) {
+        njs_vm_destroy(vm);
         return NGX_ERROR;
     }
 
@@ -578,7 +585,7 @@ ngx_engine_njs_init(ngx_engine_t *engine, ngx_engine_opts_t *opts)
 
     engine->u.njs.vm = vm;
 
-    return NJS_OK;
+    return NGX_OK;
 }
 
 
@@ -665,6 +672,7 @@ ngx_njs_clone(ngx_js_ctx_t *ctx, ngx_js_loc_conf_t *cf, void *external)
 
     engine = njs_mp_alloc(njs_vm_memory_pool(vm), sizeof(ngx_engine_t));
     if (engine == NULL) {
+        njs_vm_destroy(vm);
         return NULL;
     }
 
@@ -676,6 +684,8 @@ ngx_njs_clone(ngx_js_ctx_t *ctx, ngx_js_loc_conf_t *cf, void *external)
         ngx_js_exception(vm, &exception);
 
         ngx_log_error(NGX_LOG_ERR, ctx->log, 0, "js exception: %V", &exception);
+
+        njs_vm_destroy(vm);
 
         return NULL;
     }

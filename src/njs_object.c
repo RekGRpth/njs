@@ -31,6 +31,9 @@ static njs_int_t njs_object_define_properties(njs_vm_t *vm, njs_value_t *args,
     njs_uint_t nargs, njs_index_t unused, njs_value_t *retval);
 static njs_int_t njs_object_set_prototype(njs_vm_t *vm, njs_object_t *object,
     const njs_value_t *value);
+static njs_int_t njs_object_prototype_has_own_property(njs_vm_t *vm,
+    njs_value_t *args, njs_uint_t nargs, njs_index_t magic,
+    njs_value_t *retval);
 
 
 njs_object_t *
@@ -2274,8 +2277,10 @@ static const njs_object_prop_init_t  njs_object_constructor_properties[] =
     NJS_DECLARE_PROP_NATIVE(STRING_assign, njs_object_assign, 2, 0),
 
     NJS_DECLARE_PROP_NATIVE(STRING_is, njs_object_is, 2, 0),
-};
 
+    NJS_DECLARE_PROP_NATIVE(STRING_hasOwn,
+                            njs_object_prototype_has_own_property, 2, 1),
+};
 
 const njs_object_init_t  njs_object_constructor_init = {
     njs_object_constructor_properties,
@@ -2590,26 +2595,46 @@ njs_object_to_string(njs_vm_t *vm, njs_value_t *this, njs_value_t *retval)
 
 static njs_int_t
 njs_object_prototype_has_own_property(njs_vm_t *vm, njs_value_t *args,
-    njs_uint_t nargs, njs_index_t unused, njs_value_t *retval)
+    njs_uint_t nargs, njs_index_t magic, njs_value_t *retval)
 {
     njs_int_t             ret;
     njs_value_t           *value, *property, lvalue;
     njs_property_query_t  pq;
 
-    value = njs_argument(args, 0);
+    if (magic == 0) {
+        /* hasOwnProperty. */
 
-    if (njs_is_null_or_undefined(value)) {
-        njs_type_error(vm, "cannot convert %s argument to object",
-                       njs_type_string(value->type));
-        return NJS_ERROR;
-    }
+        property = njs_lvalue_arg(&lvalue, args, nargs, 1 + magic);
+        if (njs_slow_path(!njs_is_key(property))) {
+            ret = njs_value_to_key(vm, property, property);
+            if (njs_slow_path(ret != NJS_OK)) {
+                return NJS_ERROR;
+            }
+        }
 
-    property = njs_lvalue_arg(&lvalue, args, nargs, 1);
-
-    if (njs_slow_path(!njs_is_key(property))) {
-        ret = njs_value_to_key(vm, property, property);
-        if (njs_slow_path(ret != NJS_OK)) {
+        value = njs_argument(args, magic);
+        if (njs_is_null_or_undefined(value)) {
+            njs_type_error(vm, "cannot convert %s argument to object",
+                           njs_type_string(value->type));
             return NJS_ERROR;
+        }
+
+    } else {
+        /* hasOwn. */
+
+        value = njs_lvalue_arg(&lvalue, args, nargs, magic);
+        if (njs_is_null_or_undefined(value)) {
+            njs_type_error(vm, "cannot convert %s argument to object",
+                           njs_type_string(value->type));
+            return NJS_ERROR;
+        }
+
+        property = njs_lvalue_arg(&lvalue, args, nargs, 1 + magic);
+        if (njs_slow_path(!njs_is_key(property))) {
+            ret = njs_value_to_key(vm, property, property);
+            if (njs_slow_path(ret != NJS_OK)) {
+                return NJS_ERROR;
+            }
         }
     }
 
@@ -2642,14 +2667,6 @@ njs_object_prototype_prop_is_enumerable(njs_vm_t *vm, njs_value_t *args,
     njs_object_prop_t     *prop;
     njs_property_query_t  pq;
 
-    value = njs_argument(args, 0);
-
-    if (njs_is_null_or_undefined(value)) {
-        njs_type_error(vm, "cannot convert %s argument to object",
-                       njs_type_string(value->type));
-        return NJS_ERROR;
-    }
-
     property = njs_lvalue_arg(&lvalue, args, nargs, 1);
 
     if (njs_slow_path(!njs_is_key(property))) {
@@ -2657,6 +2674,14 @@ njs_object_prototype_prop_is_enumerable(njs_vm_t *vm, njs_value_t *args,
         if (njs_slow_path(ret != NJS_OK)) {
             return NJS_ERROR;
         }
+    }
+
+    value = njs_argument(args, 0);
+
+    if (njs_is_null_or_undefined(value)) {
+        njs_type_error(vm, "cannot convert %s argument to object",
+                       njs_type_string(value->type));
+        return NJS_ERROR;
     }
 
     njs_property_query_init(&pq, NJS_PROPERTY_QUERY_GET, 1);
@@ -2689,15 +2714,20 @@ njs_object_prototype_is_prototype_of(njs_vm_t *vm, njs_value_t *args,
     njs_value_t   *prototype, *value;
     njs_object_t  *object, *proto;
 
+    value = njs_arg(args, nargs, 1);
+
+    if (njs_slow_path(!njs_is_object(value))) {
+        goto ret_false;
+    }
+
     if (njs_slow_path(njs_is_null_or_undefined(njs_argument(args, 0)))) {
         njs_type_error(vm, "cannot convert undefined to object");
         return NJS_ERROR;
     }
 
     prototype = &args[0];
-    value = njs_arg(args, nargs, 1);
 
-    if (njs_is_object(prototype) && njs_is_object(value)) {
+    if (njs_is_object(prototype)) {
         proto = njs_object(prototype);
         object = njs_object(value);
 
@@ -2711,6 +2741,8 @@ njs_object_prototype_is_prototype_of(njs_vm_t *vm, njs_value_t *args,
 
         } while (object != NULL);
     }
+
+ret_false:
 
     njs_set_boolean(retval, 0);
 

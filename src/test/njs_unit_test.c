@@ -6259,6 +6259,11 @@ static njs_unit_test_t  njs_test[] =
               "           try {a.set(init,Infinity)} catch (e) {return e.name == 'RangeError'};})"),
       njs_str("true") },
 
+    { njs_str(NJS_INT_TYPED_ARRAY_LIST
+              ".map(v=>{try { var a = new v(1); $262.detachArrayBuffer(a.buffer); Object.entries(a)} "
+              "catch (e) {return e.name}}).every(v=>v === 'TypeError')"),
+      njs_str("true") },
+
     { njs_str("[-1,-1.00001,-Infinity]"
               ".every(v=>{ try {(new Uint8Array(10)).set([], v)} catch (ee) {return ee.name === 'RangeError'}})"),
       njs_str("true") },
@@ -21569,9 +21574,9 @@ static njs_unit_test_t  njs_backtraces_test[] =
 
     { njs_str("var ab = new ArrayBuffer(1);"
               "$262.detachArrayBuffer(ab);"
-              "ab.byteLength"),
+              "ab.slice(0)"),
       njs_str("TypeError: detached buffer\n"
-              "    at ArrayBuffer.prototype.byteLength (native)\n"
+              "    at ArrayBuffer.prototype.slice (native)\n"
               "    at main (:1)\n") },
 
     { njs_str("Object.prototype()"),

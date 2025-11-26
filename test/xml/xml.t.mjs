@@ -167,6 +167,25 @@ let modify_tsuite = {
           expected: 'WAKA' },
         { get: (doc) => {
             doc.note.setText('WAKA');
+            doc.note.setText('OVERWRITE');
+            return doc.note.$text;
+          },
+          expected: 'OVERWRITE' },
+        { get: (doc) => {
+            let note = doc.note;
+            note.setText('WAKA');
+            note.setText('OVERWRITE');
+            return note.$text;
+          },
+          expected: 'OVERWRITE' },
+        { get: (doc) => {
+            let note = doc.note;
+            note.setText('WAKA');
+            return doc.note.$text;
+          },
+          expected: 'WAKA' },
+        { get: (doc) => {
+            doc.note.setText('WAKA');
             return xml.serializeToString(doc);
           },
           expected: `<note>WAKA</note>` },
@@ -276,6 +295,19 @@ let modify_tsuite = {
           },
           expected: `<to>Tove</to>` },
         { get: (doc) => {
+            let attrs = doc.note.to.$attrs;
+            doc.note.to.removeAllAttributes();
+            return attrs.a;
+          },
+          expected: undefined },
+        { get: (doc) => {
+            let to = doc.note.to;
+            let attrs = doc.note.to.$attrs;
+            to.removeAllAttributes();
+            return attrs.a;
+          },
+          expected: undefined },
+        { get: (doc) => {
             delete doc.note.to.$attr$a;
             return xml.serializeToString(doc.note.to);
           },
@@ -305,6 +337,12 @@ let modify_tsuite = {
           expected: `<note xmlns:n0="http://a"><to a="foo" b="bar">Tove</to><from>Jani</from><n0:pdu></n0:pdu><n0:pdu></n0:pdu></note>` },
         { get: (doc) => {
             doc.note.removeChildren('to');
+            return xml.serializeToString(doc);
+          },
+          expected: `<note><from>Jani</from></note>` },
+        { get: (doc) => {
+            let note = doc.note;
+            note.removeChildren('to');
             return xml.serializeToString(doc);
           },
           expected: `<note><from>Jani</from></note>` },

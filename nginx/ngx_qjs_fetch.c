@@ -1195,13 +1195,30 @@ fail:
 static void
 ngx_qjs_fetch_error(ngx_js_http_t *http, const char *err)
 {
+    JSValue           reason;
     ngx_qjs_fetch_t  *fetch;
 
     fetch = (ngx_qjs_fetch_t *) http;
 
-    JS_ThrowInternalError(fetch->cx, "%s", err);
+    fetch->response_value = qjs_new_error(fetch->cx);
+    if (JS_IsException(fetch->response_value)) {
+        fetch->response_value = JS_UNDEFINED;
+        goto done;
+    }
 
-    fetch->response_value = JS_GetException(fetch->cx);
+    reason = JS_NewString(fetch->cx, err);
+    if (JS_IsException(reason)) {
+        goto done;
+    }
+
+    if (JS_SetPropertyStr(fetch->cx, fetch->response_value, "message",
+                          reason) < 0)
+    {
+        JS_FreeValue(fetch->cx, reason);
+        goto done;
+    }
+
+done:
 
     ngx_qjs_fetch_done(fetch, fetch->response_value, NGX_ERROR);
 }

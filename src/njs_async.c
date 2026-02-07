@@ -82,6 +82,7 @@ njs_await_fulfilled(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     vm->active_frame = async_frame;
 
     if (exception) {
+        ctx->throw_flag = 1;
         njs_vm_throw(vm, value);
 
     } else {
@@ -128,27 +129,6 @@ njs_int_t
 njs_await_rejected(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     njs_index_t unused, njs_value_t *retval)
 {
-    njs_value_t      *value;
-    njs_async_ctx_t  *ctx;
-
-    ctx = vm->top_frame->function->context;
-
-    value = njs_arg(args, nargs, 1);
-
-    if (ctx->await->native.pc == ctx->pc) {
-        /* No catch block was set before await. */
-        (void) njs_function_call(vm, njs_function(&ctx->capability->reject),
-                                 &njs_value_undefined, value, 1, retval);
-
-        njs_async_context_free(vm, ctx);
-
-        return NJS_ERROR;
-    }
-
-    /* ctx->await->native.pc points to a catch block here. */
-
-    ctx->pc = ctx->await->native.pc;
-
     return njs_await_fulfilled(vm, args, nargs, 1, retval);
 }
 

@@ -138,6 +138,33 @@ static inline JS_BOOL JS_IsNullOrUndefined(JSValueConst v)
            || JS_VALUE_GET_TAG(v) == JS_TAG_UNDEFINED;
 }
 
+/*
+ * QuickJS-NG attaches the "stack" property to an Error object too early,
+ * which results in empty stack trace when called from C code.
+ * Removing it allows the stack to be attached later during unwinding.
+ */
+static inline JSValue qjs_new_error2(JSContext *cx)
+{
+    JSAtom   stack;
+    JSValue  error;
+
+    stack = JS_NewAtom(cx, "stack");
+    if (stack == JS_ATOM_NULL) {
+        return JS_EXCEPTION;
+    }
+
+    error = JS_NewError(cx);
+    if (JS_IsException(error)) {
+        JS_FreeAtom(cx, stack);
+        return JS_EXCEPTION;
+    }
+
+    JS_DeleteProperty(cx, error, stack, 0);
+    JS_FreeAtom(cx, stack);
+
+    return error;
+}
+
 #ifdef NJS_HAVE_QUICKJS_IS_SAME_VALUE
 #define qjs_is_same_value(cx, a, b) JS_IsSameValue(cx, a, b)
 #else
@@ -154,6 +181,12 @@ static inline JS_BOOL JS_IsNullOrUndefined(JSValueConst v)
 #define qjs_is_error(cx, a) JS_IsError(a)
 #else
 #define qjs_is_error(cx, a) JS_IsError(cx, a)
+#endif
+
+#ifdef NJS_HAVE_QUICKJS_NEW_ERROR_STACK
+#define qjs_new_error(cx) qjs_new_error2(cx)
+#else
+#define qjs_new_error(cx) JS_NewError(cx)
 #endif
 
 extern qjs_module_t              *qjs_modules[];

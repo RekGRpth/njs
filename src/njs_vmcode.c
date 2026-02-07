@@ -229,6 +229,10 @@ njs_vmcode_interpreter(njs_vm_t *vm, u_char *pc, njs_value_t *rval,
 
 #endif
 
+    if (async_ctx != NULL && ((njs_async_ctx_t *) async_ctx)->throw_flag) {
+        goto error;
+    }
+
     vmcode = (njs_vmcode_generic_t *) pc;
 
 NEXT_LBL;
@@ -2722,7 +2726,6 @@ njs_vmcode_await(njs_vm_t *vm, njs_vmcode_await_t *await,
 {
     size_t              size;
     njs_int_t           ret;
-    njs_frame_t         *frame;
     njs_value_t         ctor, val, on_fulfilled, on_rejected, *value, retval;
     njs_function_t      *fulfilled, *rejected;
     njs_native_frame_t  *active;
@@ -2773,15 +2776,7 @@ njs_vmcode_await(njs_vm_t *vm, njs_vmcode_await_t *await,
 
     ctx->pc = (u_char *) await + sizeof(njs_vmcode_await_t);
     ctx->index = await->retval;
-
-    frame = (njs_frame_t *) active;
-
-    if (frame->exception.catch != NULL) {
-        ctx->await->native.pc = frame->exception.catch;
-
-    } else {
-        ctx->await->native.pc = ctx->pc;
-    }
+    ctx->throw_flag = 0;
 
     fulfilled->context = ctx;
     fulfilled->args_count = 1;

@@ -2805,7 +2805,7 @@ qjs_fs_error(JSContext *cx, const char *syscall, const char *description,
 {
     JSValue  value;
 
-    value = JS_NewError(cx);
+    value = qjs_new_error(cx);
     if (JS_IsException(value)) {
         return JS_EXCEPTION;
     }

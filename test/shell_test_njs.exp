@@ -175,7 +175,7 @@ njs_test {
 # quiet mode
 
 njs_run {"-q" "test/js/import_chain.t.js"} \
-        "ReferenceError: Cannot load module \"lib2.js\" in 7"
+        "ReferenceError: Cannot load module \"lib2.js\""
 
 # sandboxing
 

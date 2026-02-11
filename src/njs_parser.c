@@ -9205,11 +9205,9 @@ static void
 njs_parser_error(njs_vm_t *vm, njs_object_type_t type, njs_str_t *file,
     uint32_t line, const char *fmt, va_list args)
 {
-    size_t       width;
     u_char       msg[NJS_MAX_ERROR_STR];
     u_char       *p, *end;
-    njs_int_t    ret;
-    njs_value_t  value, error;
+    njs_value_t  error;
 
     if (njs_slow_path(vm->top_frame == NULL)) {
         njs_vm_runtime_init(vm);
@@ -9220,29 +9218,10 @@ njs_parser_error(njs_vm_t *vm, njs_object_type_t type, njs_str_t *file,
 
     p = njs_vsprintf(p, end, fmt, args);
 
-    width = njs_length(" in ") + file->length + NJS_INT_T_LEN;
-
-    if (p > end - width) {
-        p = end - width;
-    }
-
-    if (file->length != 0 && !vm->options.quiet) {
-        p = njs_sprintf(p, end, " in %V:%uD", file, line);
-
-    } else {
-        p = njs_sprintf(p, end, " in %uD", line);
-    }
-
     njs_error_new(vm, &error, njs_vm_proto(vm, type), msg, p - msg);
 
-    njs_set_number(&value, line);
-    njs_value_property_set(vm, &error, NJS_ATOM_STRING_lineNumber, &value);
-
-    if (file->length != 0) {
-        ret = njs_string_create(vm, &value, file->start, file->length);
-        if (ret == NJS_OK) {
-            njs_value_property_set(vm, &error, NJS_ATOM_STRING_fileName, &value);
-        }
+    if (!vm->options.quiet && file->length != 0) {
+        njs_error_stack_set(vm, &error, file, line);
     }
 
     njs_vm_throw(vm, &error);

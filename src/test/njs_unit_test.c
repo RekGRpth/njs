@@ -59,13 +59,13 @@ typedef struct {
 static njs_unit_test_t  njs_test[] =
 {
     { njs_str("@"),
-      njs_str("SyntaxError: Unexpected token \"@\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"@\"") },
 
     { njs_str("}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("1}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("/***/1/*\n**/"),
       njs_str("1") },
@@ -74,19 +74,19 @@ static njs_unit_test_t  njs_test[] =
       njs_str("1") },
 
     { njs_str(">"),
-      njs_str("SyntaxError: Unexpected token \">\" in 1") },
+      njs_str("SyntaxError: Unexpected token \">\"") },
 
     { njs_str(">>"),
-      njs_str("SyntaxError: Unexpected token \">>\" in 1") },
+      njs_str("SyntaxError: Unexpected token \">>\"") },
 
     { njs_str(">>>"),
-      njs_str("SyntaxError: Unexpected token \">>>\" in 1") },
+      njs_str("SyntaxError: Unexpected token \">>>\"") },
 
     { njs_str("=="),
-      njs_str("SyntaxError: Unexpected token \"==\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"==\"") },
 
     { njs_str("?"),
-      njs_str("SyntaxError: Unexpected token \"?\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"?\"") },
 
     /* Variable declarations. */
 
@@ -109,16 +109,16 @@ static njs_unit_test_t  njs_test[] =
       njs_str("undefined") },
 
     { njs_str("var; a"),
-      njs_str("SyntaxError: Unexpected token \";\" in 1") },
+      njs_str("SyntaxError: Unexpected token \";\"") },
 
     { njs_str("var + a"),
-      njs_str("SyntaxError: Unexpected token \"+\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"+\"") },
 
     { njs_str("//\r\n; var + a"),
-      njs_str("SyntaxError: Unexpected token \"+\" in 2") },
+      njs_str("SyntaxError: Unexpected token \"+\"") },
 
     { njs_str("/*\n*/; var + a"),
-      njs_str("SyntaxError: Unexpected token \"+\" in 2") },
+      njs_str("SyntaxError: Unexpected token \"+\"") },
 
     { njs_str("var \n a \n = 1; a"),
       njs_str("1") },
@@ -130,7 +130,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("4") },
 
     { njs_str("var a / ="),
-      njs_str("SyntaxError: Unexpected token \"/\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"/\"") },
 
     { njs_str("var a = 1; var b; a"),
       njs_str("1") },
@@ -213,16 +213,16 @@ static njs_unit_test_t  njs_test[] =
       njs_str("undefined") },
 
     { njs_str("f() = 1"),
-      njs_str("ReferenceError: Invalid left-hand side in assignment in 1") },
+      njs_str("ReferenceError: Invalid left-hand side in assignment") },
 
     { njs_str("f.a() = 1"),
-      njs_str("ReferenceError: Invalid left-hand side in assignment in 1") },
+      njs_str("ReferenceError: Invalid left-hand side in assignment") },
 
     { njs_str("++f()"),
-      njs_str("ReferenceError: Invalid left-hand side in prefix operation in 1") },
+      njs_str("ReferenceError: Invalid left-hand side in prefix operation") },
 
     { njs_str("f()++"),
-      njs_str("ReferenceError: Invalid left-hand side in postfix operation in 1") },
+      njs_str("ReferenceError: Invalid left-hand side in postfix operation") },
 
     /* Numbers. */
 
@@ -284,43 +284,43 @@ static njs_unit_test_t  njs_test[] =
       njs_str("1") },
 
     { njs_str("."),
-      njs_str("SyntaxError: Unexpected token \".\" in 1") },
+      njs_str("SyntaxError: Unexpected token \".\"") },
 
     { njs_str("0_1"),
-      njs_str("SyntaxError: Unexpected token \"0_1\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0_1\"") },
 
     { njs_str("1_"),
-      njs_str("SyntaxError: Unexpected token \"1_\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"1_\"") },
 
     { njs_str("1__0"),
-      njs_str("SyntaxError: Unexpected token \"1__0\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"1__0\"") },
 
     { njs_str("._1"),
-      njs_str("SyntaxError: Unexpected token \".\" in 1") },
+      njs_str("SyntaxError: Unexpected token \".\"") },
 
     { njs_str(".1_"),
-      njs_str("SyntaxError: Unexpected token \".1_\" in 1") },
+      njs_str("SyntaxError: Unexpected token \".1_\"") },
 
     { njs_str("1_.1"),
-      njs_str("SyntaxError: Unexpected token \"1_\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"1_\"") },
 
     { njs_str(".0__1"),
-      njs_str("SyntaxError: Unexpected token \".0__1\" in 1") },
+      njs_str("SyntaxError: Unexpected token \".0__1\"") },
 
     { njs_str("1e_1"),
-      njs_str("SyntaxError: Unexpected token \"1e_1\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"1e_1\"") },
 
     { njs_str("1e-_1"),
-      njs_str("SyntaxError: Unexpected token \"1e\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"1e\"") },
 
     { njs_str("1E1__0"),
-      njs_str("SyntaxError: Unexpected token \"1E1__0\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"1E1__0\"") },
 
     { njs_str("1_e1"),
-      njs_str("SyntaxError: Unexpected token \"1_e1\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"1_e1\"") },
 
     { njs_str("1e1_"),
-      njs_str("SyntaxError: Unexpected token \"1e1_\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"1e1_\"") },
 
     { njs_str("-_1"),
       njs_str("ReferenceError: \"_1\" is not defined") },
@@ -346,48 +346,48 @@ static njs_unit_test_t  njs_test[] =
       njs_str("3.2138760885179806e+60") },
 
     { njs_str("0o"),
-      njs_str("SyntaxError: Unexpected token \"0o\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0o\"") },
 
     { njs_str("0O778"),
-      njs_str("SyntaxError: Unexpected token \"0O778\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0O778\"") },
 
     { njs_str("0O_7"),
-      njs_str("SyntaxError: Unexpected token \"0O_7\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0O_7\"") },
 
     { njs_str("0O + 1"),
-      njs_str("SyntaxError: Unexpected token \"0O\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0O\"") },
 
     { njs_str("0o7_"),
-      njs_str("SyntaxError: Unexpected token \"0o7_\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0o7_\"") },
 
     { njs_str("0o7__7"),
-      njs_str("SyntaxError: Unexpected token \"0o7__7\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0o7__7\"") },
 
     { njs_str("0o7.1"),
-      njs_str("SyntaxError: Unexpected token \".1\" in 1") },
+      njs_str("SyntaxError: Unexpected token \".1\"") },
 
     /* Legacy Octal Numbers are deprecated. */
 
     { njs_str("00"),
-      njs_str("SyntaxError: Unexpected token \"00\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"00\"") },
 
     { njs_str("08"),
-      njs_str("SyntaxError: Unexpected token \"08\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"08\"") },
 
     { njs_str("09"),
-      njs_str("SyntaxError: Unexpected token \"09\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"09\"") },
 
     { njs_str("0011"),
-      njs_str("SyntaxError: Unexpected token \"0011\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0011\"") },
 
     { njs_str("0_"),
-      njs_str("SyntaxError: Unexpected token \"0_\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0_\"") },
 
     { njs_str("0_1"),
-      njs_str("SyntaxError: Unexpected token \"0_1\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0_1\"") },
 
     { njs_str("00_1"),
-      njs_str("SyntaxError: Unexpected token \"00_1\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"00_1\"") },
 
     /* Binary Numbers. */
 
@@ -407,25 +407,25 @@ static njs_unit_test_t  njs_test[] =
       njs_str("1.2379400392853803e+27") },
 
     { njs_str("0b"),
-      njs_str("SyntaxError: Unexpected token \"0b\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0b\"") },
 
     { njs_str("0B12"),
-      njs_str("SyntaxError: Unexpected token \"0B12\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0B12\"") },
 
     { njs_str("0b_11"),
-      njs_str("SyntaxError: Unexpected token \"0b_11\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0b_11\"") },
 
     { njs_str("0b + 1"),
-      njs_str("SyntaxError: Unexpected token \"0b\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0b\"") },
 
     { njs_str("0B1__1"),
-      njs_str("SyntaxError: Unexpected token \"0B1__1\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0B1__1\"") },
 
     { njs_str("0b11_"),
-      njs_str("SyntaxError: Unexpected token \"0b11_\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0b11_\"") },
 
     { njs_str("0b1.1"),
-      njs_str("SyntaxError: Unexpected token \".1\" in 1") },
+      njs_str("SyntaxError: Unexpected token \".1\"") },
 
     /* Hex Numbers. */
 
@@ -448,25 +448,25 @@ static njs_unit_test_t  njs_test[] =
       njs_str("1e+81") },
 
     { njs_str("0x"),
-      njs_str("SyntaxError: Unexpected token \"0x\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0x\"") },
 
     { njs_str("0xffff."),
-      njs_str("SyntaxError: Unexpected end of input in 1") },
+      njs_str("SyntaxError: Unexpected end of input") },
 
     { njs_str("0x12g"),
-      njs_str("SyntaxError: Unexpected token \"0x12g\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0x12g\"") },
 
     { njs_str("0X_ff"),
-      njs_str("SyntaxError: Unexpected token \"0X_ff\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0X_ff\"") },
 
     { njs_str("0X + 1"),
-      njs_str("SyntaxError: Unexpected token \"0X\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0X\"") },
 
     { njs_str("0xff_"),
-      njs_str("SyntaxError: Unexpected token \"0xff_\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0xff_\"") },
 
     { njs_str("0Xf__f"),
-      njs_str("SyntaxError: Unexpected token \"0Xf__f\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"0Xf__f\"") },
 
     { njs_str(""),
       njs_str("undefined") },
@@ -537,22 +537,22 @@ static njs_unit_test_t  njs_test[] =
       njs_str("-Infinity") },
 
     { njs_str("1e"),
-      njs_str("SyntaxError: Unexpected token \"1e\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"1e\"") },
 
     { njs_str("1.e"),
-      njs_str("SyntaxError: Unexpected token \"1.e\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"1.e\"") },
 
     { njs_str("1e+"),
-      njs_str("SyntaxError: Unexpected token \"1e\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"1e\"") },
 
     { njs_str("1.e-"),
-      njs_str("SyntaxError: Unexpected token \"1.e\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"1.e\"") },
 
     { njs_str("1eZ"),
-      njs_str("SyntaxError: Unexpected token \"1eZ\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"1eZ\"") },
 
     { njs_str(".e1"),
-      njs_str("SyntaxError: Unexpected token \".\" in 1") },
+      njs_str("SyntaxError: Unexpected token \".\"") },
 
     { njs_str("Number.prototype.X = function(){return 123;};"
                  "(1).X()"),
@@ -1141,11 +1141,11 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("-3 ** 2"),
       njs_str("SyntaxError: Either left-hand side or entire exponentiation "
-                 "must be parenthesized in 1") },
+                 "must be parenthesized") },
 
     { njs_str("-(3) ** 2"),
       njs_str("SyntaxError: Either left-hand side or entire exponentiation "
-                 "must be parenthesized in 1") },
+                 "must be parenthesized") },
 
     { njs_str("-(3 ** 2)"),
       njs_str("-9") },
@@ -1498,10 +1498,10 @@ static njs_unit_test_t  njs_test[] =
       njs_str("false") },
 
     { njs_str("1 && 1 ?? true"),
-      njs_str("SyntaxError: Unexpected token \"??\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"??\"") },
 
     { njs_str("null ?? 0 || 1"),
-      njs_str("SyntaxError: Unexpected token \"||\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"||\"") },
 
     { njs_str("var a = true; a = -~!a"),
       njs_str("1") },
@@ -2654,10 +2654,10 @@ static njs_unit_test_t  njs_test[] =
       njs_str("1") },
 
     { njs_str("a = 0; a \n ++"),
-      njs_str("SyntaxError: Unexpected end of input in 2") },
+      njs_str("SyntaxError: Unexpected end of input") },
 
     { njs_str("a = 0; a \n --"),
-      njs_str("SyntaxError: Unexpected end of input in 2") },
+      njs_str("SyntaxError: Unexpected end of input") },
 
     { njs_str("var a = 0; a \n + 1"),
       njs_str("1") },
@@ -2691,7 +2691,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("NaN undefined") },
 
     { njs_str("var a += 1"),
-      njs_str("SyntaxError: Unexpected token \"+=\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"+=\"") },
 
     { njs_str("var a = a + 1"),
       njs_str("undefined") },
@@ -2747,10 +2747,10 @@ static njs_unit_test_t  njs_test[] =
     /* automatic semicolon insertion. */
 
     { njs_str("(a\n--"),
-      njs_str("SyntaxError: Unexpected token \"--\" in 2") },
+      njs_str("SyntaxError: Unexpected token \"--\"") },
 
     { njs_str("(a\n++"),
-      njs_str("SyntaxError: Unexpected token \"++\" in 2") },
+      njs_str("SyntaxError: Unexpected token \"++\"") },
 
     { njs_str("var x = 0, y = 2; x\n--\ny; [x,y]"),
       njs_str("0,1") },
@@ -2788,13 +2788,13 @@ static njs_unit_test_t  njs_test[] =
       njs_str("123") },
 
     { njs_str("(function(){ if(true) return 1 else return 0; })()"),
-      njs_str("SyntaxError: Unexpected token \"else\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"else\"") },
 
     { njs_str("(function(){ if(true) return 1; else return 0; })()"),
       njs_str("1") },
 
     { njs_str("(function(){ if(true) return 1;; else return 0; })()"),
-      njs_str("SyntaxError: Unexpected token \"else\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"else\"") },
 
     { njs_str("(function(){ if(true) return 1\n else return 0; })()"),
       njs_str("1") },
@@ -2803,7 +2803,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("1") },
 
     { njs_str("function f(n) {if (n) throw 'foo' else return 1}; f(0)"),
-      njs_str("SyntaxError: Unexpected token \"else\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"else\"") },
 
     { njs_str("function f(n) {if (n)\n throw 'foo'\nelse return 1}; f(0)"),
       njs_str("1") },
@@ -2815,7 +2815,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("1") },
 
     { njs_str("(function(){ for (var p in [1] ){ if (1) break else return 0; }})()"),
-      njs_str("SyntaxError: Unexpected token \"else\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"else\"") },
 
     { njs_str("(function(){ for (var p in [1] ){ if (1) break\n else return 0; }})()"),
       njs_str("undefined") },
@@ -2824,7 +2824,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("undefined") },
 
     { njs_str("(function(){ for (var p in [1] ){ if (1) continue else return 0; }})()"),
-      njs_str("SyntaxError: Unexpected token \"else\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"else\"") },
 
     { njs_str("(function(){ for (var p in [1] ){ if (1) continue\n else return 0; }})()"),
       njs_str("undefined") },
@@ -2850,15 +2850,15 @@ static njs_unit_test_t  njs_test[] =
     /* do while. */
 
     { njs_str("do { break } if (false)"),
-      njs_str("SyntaxError: Unexpected token \"if\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"if\"") },
 
     /* for in. */
 
     { njs_str("for (null in undefined);"),
-      njs_str("ReferenceError: Invalid left-hand side \"null\" in for-in statement in 1") },
+      njs_str("ReferenceError: Invalid left-hand side \"null\" in for-in statement") },
 
     { njs_str("for (var a, b in []);"),
-      njs_str("SyntaxError: Unexpected token \"in\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"in\"") },
 
     { njs_str("var s = ''; for (var p in [1,2]) {s += p}; s"),
       njs_str("01") },
@@ -2896,10 +2896,10 @@ static njs_unit_test_t  njs_test[] =
       njs_str("b") },
 
     { njs_str("for (var x = x in [1,2]; ; ) {break};"),
-      njs_str("SyntaxError: Invalid left-hand side in for-loop in 1") },
+      njs_str("SyntaxError: Invalid left-hand side in for-loop") },
 
     { njs_str("for (x = x in [1,2]; ; ) {break};"),
-      njs_str("SyntaxError: Invalid left-hand side in for-loop in 1") },
+      njs_str("SyntaxError: Invalid left-hand side in for-loop") },
 
     { njs_str("for (var x = (x in [1,2]); ; ) {break}; x;"),
       njs_str("false") },
@@ -2908,14 +2908,14 @@ static njs_unit_test_t  njs_test[] =
       njs_str("false") },
 
     { njs_str("for (++a in {}; ; ) {break}"),
-      njs_str("SyntaxError: Invalid left-hand side in for-loop in 1") },
+      njs_str("SyntaxError: Invalid left-hand side in for-loop") },
 
     { njs_str("var a, b, c, d = 1; for (a + b, c = d; ; ){break}; c"),
       njs_str("1") },
 
     { njs_str("var x = 1, y, z = 'a', u = {a:1};"
               "for (var a = x, y = z in u; ; ) {break}; y"),
-      njs_str("SyntaxError: Invalid left-hand side in for-loop in 1") },
+      njs_str("SyntaxError: Invalid left-hand side in for-loop") },
 
     { njs_str("var x = 1, y, z = 'a', u = {a:1};"
               "for (var a = x, y= (z in u) ; ; ) {break}; y"),
@@ -2931,16 +2931,16 @@ static njs_unit_test_t  njs_test[] =
       njs_str("0") },
 
     { njs_str("for (in + j;;) {}"),
-      njs_str("SyntaxError: Unexpected token \"in\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"in\"") },
 
     { njs_str("for (true ? 0 in {}: 0; false; ) ;"),
       njs_str("undefined") },
 
     { njs_str("for (true ? 0 : 0 in {}; false; ) ;"),
-      njs_str("SyntaxError: Invalid left-hand side in for-loop in 1") },
+      njs_str("SyntaxError: Invalid left-hand side in for-loop") },
 
     { njs_str("for ((a in b)) {}"),
-      njs_str("SyntaxError: Unexpected token \")\" in 1") },
+      njs_str("SyntaxError: Unexpected token \")\"") },
 
     { njs_str("var a='a', b={b:1}; for ((a in b); ; ) {break}; a"),
       njs_str("a") },
@@ -2949,42 +2949,42 @@ static njs_unit_test_t  njs_test[] =
       njs_str("undefined") },
 
     { njs_str("for(I in``[)8"),
-      njs_str("SyntaxError: Unexpected token \")\" in 1") },
+      njs_str("SyntaxError: Unexpected token \")\"") },
 
     { njs_str("for(9A=>>"),
-      njs_str("SyntaxError: Unexpected token \"9A\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"9A\"") },
 
     { njs_str("for(A?{,"),
-      njs_str("SyntaxError: Unexpected token \",\" in 1") },
+      njs_str("SyntaxError: Unexpected token \",\"") },
 
     { njs_str("for(Symbol(A=>A+       in 'A') P/$"),
-      njs_str("SyntaxError: Unexpected token \"in\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"in\"") },
 
     { njs_str("for (a(b * in d) ;"),
-      njs_str("SyntaxError: Unexpected token \"in\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"in\"") },
 
     { njs_str("for(c=let c"),
-      njs_str("SyntaxError: Unexpected token \"let\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"let\"") },
 
     { njs_str("for(var``>0; 0 ;) ;"),
-      njs_str("SyntaxError: Unexpected token \"`\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"`\"") },
 
     { njs_str("for(1;;)for(-x;;)fr({-x;;)f"),
-      njs_str("SyntaxError: Unexpected token \"-\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"-\"") },
 
     { njs_str("for(i;;)for(-new+3;;)break;"),
-      njs_str("SyntaxError: Unexpected token \"+\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"+\"") },
 
     /* switch. */
 
     { njs_str("switch"),
-      njs_str("SyntaxError: Unexpected end of input in 1") },
+      njs_str("SyntaxError: Unexpected end of input") },
 
     { njs_str("switch (1);"),
-      njs_str("SyntaxError: Unexpected token \";\" in 1") },
+      njs_str("SyntaxError: Unexpected token \";\"") },
 
     { njs_str("switch (1) { do { } while (1) }"),
-      njs_str("SyntaxError: Unexpected token \"do\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"do\"") },
 
     { njs_str("switch (1) {}"),
       njs_str("undefined") },
@@ -2999,7 +2999,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("undefined") },
 
     { njs_str("switch (1) {default:; default:}"),
-      njs_str("SyntaxError: More than one default clause in switch statement in 1") },
+      njs_str("SyntaxError: More than one default clause in switch statement") },
 
     { njs_str("switch (1) {case 0:;}"),
       njs_str("undefined") },
@@ -3056,33 +3056,33 @@ static njs_unit_test_t  njs_test[] =
       njs_str("1,0,0") },
 
     { njs_str("switch (1) {case 1: ii > 1; ii => default:}"),
-      njs_str("SyntaxError: Unexpected token \"default\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"default\"") },
 
     { njs_str("switch (1) {case 1: ii > 1; var a = functin () {default:}"),
-      njs_str("SyntaxError: Unexpected token \"{\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"{\"") },
 
     { njs_str("switch (1) {default: ii > 1; ii => case 2:}"),
-      njs_str("SyntaxError: Unexpected token \"case\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"case\"") },
 
     { njs_str("switch (1) {default: ii > 1; var a = functin () {case 2:}"),
-      njs_str("SyntaxError: Unexpected token \"{\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"{\"") },
 
     { njs_str("switch (1) {case 1: ii > 1; ii => case 2:}"),
-      njs_str("SyntaxError: Unexpected token \"case\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"case\"") },
 
     { njs_str("switch (1) {case 1: ii > 1; var a = functin () {case 2:}"),
-      njs_str("SyntaxError: Unexpected token \"{\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"{\"") },
 
     /* continue. */
 
     { njs_str("continue"),
-      njs_str("SyntaxError: Illegal continue statement in 1") },
+      njs_str("SyntaxError: Illegal continue statement") },
 
     { njs_str("\n{\ncontinue;\n}"),
-      njs_str("SyntaxError: Illegal continue statement in 3") },
+      njs_str("SyntaxError: Illegal continue statement") },
 
     { njs_str("do continue while (false)"),
-      njs_str("SyntaxError: Unexpected token \"while\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"while\"") },
 
     { njs_str("do continue; while (false)"),
       njs_str("undefined") },
@@ -3149,16 +3149,16 @@ static njs_unit_test_t  njs_test[] =
     /* break. */
 
     { njs_str("break"),
-      njs_str("SyntaxError: Illegal break statement in 1") },
+      njs_str("SyntaxError: Illegal break statement") },
 
     { njs_str("{break}"),
-      njs_str("SyntaxError: Illegal break statement in 1") },
+      njs_str("SyntaxError: Illegal break statement") },
 
     { njs_str("\nbreak"),
-      njs_str("SyntaxError: Illegal break statement in 2") },
+      njs_str("SyntaxError: Illegal break statement") },
 
     { njs_str("do break while (true)"),
-      njs_str("SyntaxError: Unexpected token \"while\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"while\"") },
 
     { njs_str("do break; while (true)"),
       njs_str("undefined") },
@@ -3238,25 +3238,25 @@ static njs_unit_test_t  njs_test[] =
       njs_str("undefined") },
 
     { njs_str("a:\n\n"),
-      njs_str("SyntaxError: Unexpected end of input in 3") },
+      njs_str("SyntaxError: Unexpected end of input") },
 
     { njs_str("a : var n = 0; b :++n"),
       njs_str("1") },
 
     { njs_str("a:{a:1}"),
-      njs_str("SyntaxError: Label \"a\" has already been declared in 1") },
+      njs_str("SyntaxError: Label \"a\" has already been declared") },
 
     { njs_str("for (var i in [1]) {break b}"),
-      njs_str("SyntaxError: Undefined label \"b\" in 1") },
+      njs_str("SyntaxError: Undefined label \"b\"") },
 
     { njs_str("for (var i in [1]) {continue b}"),
-      njs_str("SyntaxError: Undefined label \"b\" in 1") },
+      njs_str("SyntaxError: Undefined label \"b\"") },
 
     { njs_str("a:{break b}"),
-      njs_str("SyntaxError: Undefined label \"b\" in 1") },
+      njs_str("SyntaxError: Undefined label \"b\"") },
 
     { njs_str("a:{continue b}"),
-      njs_str("SyntaxError: Undefined label \"b\" in 1") },
+      njs_str("SyntaxError: Undefined label \"b\"") },
 
     { njs_str("a:function name() {}"),
       njs_str("SyntaxError: In strict mode code, functions can only be declared at top level or inside a block.") },
@@ -3447,7 +3447,7 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("a:{ try { try { continue a; } catch (e) {} finally {} } "
                  "    catch (e) {} finally {}; "
                  "}"),
-      njs_str("SyntaxError: Illegal continue statement in 1") },
+      njs_str("SyntaxError: Illegal continue statement") },
 
     { njs_str("var i = 0, j = 0, r = 0;"
                  "out1: while (i < 3) "
@@ -3659,16 +3659,16 @@ static njs_unit_test_t  njs_test[] =
       njs_str("undefined") },
 
     { njs_str("null = 1"),
-      njs_str("ReferenceError: Invalid left-hand side in assignment in 1") },
+      njs_str("ReferenceError: Invalid left-hand side in assignment") },
 
     { njs_str("undefined = 1"),
       njs_str("TypeError: Cannot assign to read-only property \"undefined\" of object") },
 
     { njs_str("null++"),
-      njs_str("ReferenceError: Invalid left-hand side in postfix operation in 1") },
+      njs_str("ReferenceError: Invalid left-hand side in postfix operation") },
 
     { njs_str("++null"),
-      njs_str("ReferenceError: Invalid left-hand side in prefix operation in 1") },
+      njs_str("ReferenceError: Invalid left-hand side in prefix operation") },
 
     { njs_str("var a, b; b = a; a = 1; a +' '+ b"),
       njs_str("1 undefined") },
@@ -3833,7 +3833,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("5") },
 
     { njs_str("var x = { a: 1; b: 2 }"),
-      njs_str("SyntaxError: Unexpected token \";\" in 1") },
+      njs_str("SyntaxError: Unexpected token \";\"") },
 
     { njs_str("var x = { a: 1, b: x.a }"),
       njs_str("TypeError: cannot get property \"a\" of undefined") },
@@ -3877,16 +3877,16 @@ static njs_unit_test_t  njs_test[] =
       njs_str("{a:1,b:2,c:3}") },
 
     { njs_str("({1})"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("({default})"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("({var})"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("({this})"),
-        njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+        njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("typeof ({Number}).Number"),
       njs_str("function") },
@@ -3901,10 +3901,10 @@ static njs_unit_test_t  njs_test[] =
       njs_str("true") },
 
     { njs_str("var a; delete a"),
-      njs_str("SyntaxError: Delete of an unqualified identifier in 1") },
+      njs_str("SyntaxError: Delete of an unqualified identifier") },
 
     { njs_str("delete undefined"),
-      njs_str("SyntaxError: Delete of an unqualified identifier in 1") },
+      njs_str("SyntaxError: Delete of an unqualified identifier") },
 
     { njs_str("delete this !== true"),
       njs_str("false") },
@@ -3969,10 +3969,10 @@ static njs_unit_test_t  njs_test[] =
       njs_str("1000") },
 
     { njs_str("delete NaN"),
-      njs_str("SyntaxError: Delete of an unqualified identifier in 1") },
+      njs_str("SyntaxError: Delete of an unqualified identifier") },
 
     { njs_str("delete Infinity"),
-      njs_str("SyntaxError: Delete of an unqualified identifier in 1") },
+      njs_str("SyntaxError: Delete of an unqualified identifier") },
 
     { njs_str("delete -Infinity"),
       njs_str("true") },
@@ -3996,13 +3996,13 @@ static njs_unit_test_t  njs_test[] =
       njs_str("1") },
 
     { njs_str("delete a"),
-      njs_str("SyntaxError: Delete of an unqualified identifier in 1") },
+      njs_str("SyntaxError: Delete of an unqualified identifier") },
 
     { njs_str("var a = 1; delete a"),
-      njs_str("SyntaxError: Delete of an unqualified identifier in 1") },
+      njs_str("SyntaxError: Delete of an unqualified identifier") },
 
     { njs_str("function f(){} delete f"),
-      njs_str("SyntaxError: Delete of an unqualified identifier in 1") },
+      njs_str("SyntaxError: Delete of an unqualified identifier") },
 
     { njs_str("var a = { x:1 }; ('x' in a) +' '+ (1 in a)"),
       njs_str("true false") },
@@ -4039,7 +4039,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("4") },
 
     { njs_str("({[]:1})"),
-      njs_str("SyntaxError: Unexpected token \"]\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"]\"") },
 
     { njs_str("({'AB\\ncd':1})['AB\\ncd']"),
       njs_str("1") },
@@ -4173,7 +4173,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("2") },
 
     { njs_str("var a = [ 1, 2; 3 ]; a[0] + a[1] + a[2]"),
-      njs_str("SyntaxError: Unexpected token \";\" in 1") },
+      njs_str("SyntaxError: Unexpected token \";\"") },
 
     { njs_str("var a = [ 1, 2, 3 ]; a[0] +' '+ a[1] +' '+ a[2] +' '+ a[3]"),
       njs_str("1 2 3 undefined") },
@@ -7579,31 +7579,31 @@ static njs_unit_test_t  njs_test[] =
     /* Template literal. */
 
     { njs_str("`"),
-      njs_str("SyntaxError: Unterminated template literal in 1") },
+      njs_str("SyntaxError: Unterminated template literal") },
 
     { njs_str("`$"),
-      njs_str("SyntaxError: Unterminated template literal in 1") },
+      njs_str("SyntaxError: Unterminated template literal") },
 
     { njs_str("`${"),
-      njs_str("SyntaxError: Unexpected end of input in 1") },
+      njs_str("SyntaxError: Unexpected end of input") },
 
     { njs_str("`${a"),
-      njs_str("SyntaxError: Missing \"}\" in template expression in 1") },
+      njs_str("SyntaxError: Missing \"}\" in template expression") },
 
     { njs_str("`${}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("`${a}"),
-      njs_str("SyntaxError: Unterminated template literal in 1") },
+      njs_str("SyntaxError: Unterminated template literal") },
 
     { njs_str("`${a}bc"),
-      njs_str("SyntaxError: Unterminated template literal in 1") },
+      njs_str("SyntaxError: Unterminated template literal") },
 
     { njs_str("`\\"),
-      njs_str("SyntaxError: Unterminated template literal in 1") },
+      njs_str("SyntaxError: Unterminated template literal") },
 
     { njs_str("`\\${a}bc"),
-      njs_str("SyntaxError: Unterminated template literal in 1") },
+      njs_str("SyntaxError: Unterminated template literal") },
 
     { njs_str("var v = undefined; var u8 = 'α';"
               "[`undefined${u8}`.length, `undefineQ${u8}`.length]"),
@@ -7616,7 +7616,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("o = `1`") },
 
     { njs_str("`\\unicode`"),
-      njs_str("SyntaxError: Invalid Unicode code point \"\\unicode\" in 1") },
+      njs_str("SyntaxError: Invalid Unicode code point \"\\unicode\"") },
 
     { njs_str("var a = 5; var b = 10;"
                  "`Fifteen is ${a + b} and \nnot ${2 * a + b}.`;"),
@@ -7733,67 +7733,67 @@ static njs_unit_test_t  njs_test[] =
       njs_str("ab") },
 
     { njs_str("'a\\\n\rb'"),
-      njs_str("SyntaxError: Unterminated string \"'a\\\n\r\" in 1") },
+      njs_str("SyntaxError: Unterminated string \"'a\\\n\r\"") },
 
     { njs_str("'a\\\nb\nc'"),
-      njs_str("SyntaxError: Unterminated string \"'a\\\nb\n\" in 1") },
+      njs_str("SyntaxError: Unterminated string \"'a\\\nb\n\"") },
 
     { njs_str("'abcde"),
-      njs_str("SyntaxError: Unterminated string \"'abcde\" in 1") },
+      njs_str("SyntaxError: Unterminated string \"'abcde\"") },
 
     { njs_str("'\\"),
-      njs_str("SyntaxError: Unterminated string \"'\\\" in 1") },
+      njs_str("SyntaxError: Unterminated string \"'\\\"") },
 
     { njs_str("'\\\r\n"),
-      njs_str("SyntaxError: Unterminated string \"'\\\r\n\" in 1") },
+      njs_str("SyntaxError: Unterminated string \"'\\\r\n\"") },
 
     { njs_str("'\\'"),
-      njs_str("SyntaxError: Unterminated string \"'\\'\" in 1") },
+      njs_str("SyntaxError: Unterminated string \"'\\'\"") },
 
     { njs_str("'a\n"),
-      njs_str("SyntaxError: Unterminated string \"'a\n\" in 1") },
+      njs_str("SyntaxError: Unterminated string \"'a\n\"") },
 
     { njs_str("'a\r"),
-      njs_str("SyntaxError: Unterminated string \"'a\r\" in 1") },
+      njs_str("SyntaxError: Unterminated string \"'a\r\"") },
 
     { njs_str("\"a\n"),
-      njs_str("SyntaxError: Unterminated string \"\"a\n\" in 1") },
+      njs_str("SyntaxError: Unterminated string \"\"a\n\"") },
 
     { njs_str("'\\u03B1'"),
       njs_str("α") },
 
     { njs_str("'\\u'"),
-      njs_str("SyntaxError: Invalid Unicode code point \"\\u\" in 1") },
+      njs_str("SyntaxError: Invalid Unicode code point \"\\u\"") },
 
     { njs_str("'\\uzzzz'"),
-      njs_str("SyntaxError: Invalid Unicode code point \"\\uzzzz\" in 1") },
+      njs_str("SyntaxError: Invalid Unicode code point \"\\uzzzz\"") },
 
     { njs_str("'\\u03B'"),
-      njs_str("SyntaxError: Invalid Unicode code point \"\\u03B\" in 1") },
+      njs_str("SyntaxError: Invalid Unicode code point \"\\u03B\"") },
 
     { njs_str("'\\u03BG'"),
-      njs_str("SyntaxError: Invalid Unicode code point \"\\u03BG\" in 1") },
+      njs_str("SyntaxError: Invalid Unicode code point \"\\u03BG\"") },
 
     { njs_str("'\\u03B '"),
-      njs_str("SyntaxError: Invalid Unicode code point \"\\u03B \" in 1") },
+      njs_str("SyntaxError: Invalid Unicode code point \"\\u03B \"") },
 
     { njs_str("'\\u{61}\\u{3B1}\\u{20AC}'"),
       njs_str("aα€") },
 
     { njs_str("'\\u'"),
-      njs_str("SyntaxError: Invalid Unicode code point \"\\u\" in 1") },
+      njs_str("SyntaxError: Invalid Unicode code point \"\\u\"") },
 
     { njs_str("'\\u{'"),
-      njs_str("SyntaxError: Invalid Unicode code point \"\\u{\" in 1") },
+      njs_str("SyntaxError: Invalid Unicode code point \"\\u{\"") },
 
     { njs_str("'\\u{}'"),
-      njs_str("SyntaxError: Invalid Unicode code point \"\\u{}\" in 1") },
+      njs_str("SyntaxError: Invalid Unicode code point \"\\u{}\"") },
 
     { njs_str("'\\u{1234567}'"),
-      njs_str("SyntaxError: Invalid Unicode code point \"\\u{1234567}\" in 1") },
+      njs_str("SyntaxError: Invalid Unicode code point \"\\u{1234567}\"") },
 
     { njs_str("'\\u{a00000}'"),
-      njs_str("SyntaxError: Invalid Unicode code point \"\\u{a00000}\" in 1") },
+      njs_str("SyntaxError: Invalid Unicode code point \"\\u{a00000}\"") },
 
     { njs_str("'\\x61'"),
       njs_str("a") },
@@ -7838,7 +7838,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("�[") },
 
     { njs_str("'\\u{D800}\\u{'"),
-      njs_str("SyntaxError: Invalid Unicode code point \"\\u{D800}\\u{\" in 1") },
+      njs_str("SyntaxError: Invalid Unicode code point \"\\u{D800}\\u{\"") },
 
     { njs_str("'α' !== '\\α'"),
       njs_str("false") },
@@ -7852,31 +7852,31 @@ static njs_unit_test_t  njs_test[] =
       njs_str("\0a") },
 
     { njs_str("'\\1a'"),
-      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code") },
 
     { njs_str("'a\\2a'"),
-      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code") },
 
     { njs_str("'\\3a'"),
-      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code") },
 
     { njs_str("'a\\4a'"),
-      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code") },
 
     { njs_str("'\\5a'"),
-      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code") },
 
     { njs_str("'a\\6a'"),
-      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code") },
 
     { njs_str("'\\7a'"),
-      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code") },
 
     { njs_str("'\\8a'"),
-      njs_str("SyntaxError: The escapes \\8 and \\9 can't be used in untagged template literals or in strict mode code in 1") },
+      njs_str("SyntaxError: The escapes \\8 and \\9 can't be used in untagged template literals or in strict mode code") },
 
     { njs_str("'\\9a'"),
-      njs_str("SyntaxError: The escapes \\8 and \\9 can't be used in untagged template literals or in strict mode code in 1") },
+      njs_str("SyntaxError: The escapes \\8 and \\9 can't be used in untagged template literals or in strict mode code") },
 
     { njs_str("'\\aa'"),
       njs_str("aa") },
@@ -7885,10 +7885,10 @@ static njs_unit_test_t  njs_test[] =
       njs_str("*a") },
 
     { njs_str("`\\7`"),
-      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code in 1") },
+      njs_str("SyntaxError: Octal escape sequences can't be used in untagged template literals or in strict mode code") },
 
     { njs_str("`\\9`"),
-      njs_str("SyntaxError: The escapes \\8 and \\9 can't be used in untagged template literals or in strict mode code in 1") },
+      njs_str("SyntaxError: The escapes \\8 and \\9 can't be used in untagged template literals or in strict mode code") },
 
     /* Octal escape sequences are allowed in tagged template literals in strict mode.*/
 
@@ -8283,7 +8283,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("97") },
 
     { njs_str("var a = 'abcdef'; a.3"),
-      njs_str("SyntaxError: Unexpected token \".3\" in 1") },
+      njs_str("SyntaxError: Unexpected token \".3\"") },
 
     { njs_str("'abcdef'[3]"),
       njs_str("d") },
@@ -9554,13 +9554,13 @@ static njs_unit_test_t  njs_test[] =
       njs_str("/=/") },
 
     { njs_str("/["),
-      njs_str("SyntaxError: Unterminated RegExp \"/[\" in 1") },
+      njs_str("SyntaxError: Unterminated RegExp \"/[\"") },
 
     { njs_str("/[][a"),
-      njs_str("SyntaxError: Unterminated RegExp \"/[][a\" in 1") },
+      njs_str("SyntaxError: Unterminated RegExp \"/[][a\"") },
 
     { njs_str("/[\\"),
-      njs_str("SyntaxError: Unterminated RegExp \"/[\\\" in 1") },
+      njs_str("SyntaxError: Unterminated RegExp \"/[\\\"") },
 
     { njs_str("/\\s*;\\s*/"),
       njs_str("/\\s*;\\s*/") },
@@ -10167,43 +10167,43 @@ static njs_unit_test_t  njs_test[] =
     /* Functions. */
 
     { njs_str("return"),
-      njs_str("SyntaxError: Illegal return statement in 1") },
+      njs_str("SyntaxError: Illegal return statement") },
 
     { njs_str("{return}"),
-      njs_str("SyntaxError: Illegal return statement in 1") },
+      njs_str("SyntaxError: Illegal return statement") },
 
     { njs_str("\n{\nreturn;\n}"),
-      njs_str("SyntaxError: Illegal return statement in 3") },
+      njs_str("SyntaxError: Illegal return statement") },
 
     { njs_str("function f () {return a +}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("`${function(){return n=>}}`"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("(function(){return a +})"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("if (1) function f(){}"),
-      njs_str("SyntaxError: Functions can only be declared at top level or inside a block in 1") },
+      njs_str("SyntaxError: Functions can only be declared at top level or inside a block") },
 
     { njs_str("if (1) { function f(){}}"),
       njs_str("undefined") },
 
     { njs_str("while (1) function f() { }"),
-      njs_str("SyntaxError: Functions can only be declared at top level or inside a block in 1") },
+      njs_str("SyntaxError: Functions can only be declared at top level or inside a block") },
 
     { njs_str("while (1) { break; function f(){}}"),
       njs_str("undefined") },
 
     { njs_str("for (;;) function f() { }"),
-      njs_str("SyntaxError: Functions can only be declared at top level or inside a block in 1") },
+      njs_str("SyntaxError: Functions can only be declared at top level or inside a block") },
 
     { njs_str("for (;;) { break; function f(){}}"),
       njs_str("undefined") },
 
     { njs_str("do function f() { } while (0)"),
-      njs_str("SyntaxError: Functions can only be declared at top level or inside a block in 1") },
+      njs_str("SyntaxError: Functions can only be declared at top level or inside a block") },
 
     { njs_str("function f() { return 1; } { function f() { return 2; } } f()"),
       njs_str("1") },
@@ -10215,13 +10215,13 @@ static njs_unit_test_t  njs_test[] =
       njs_str("undefined") },
 
     { njs_str("{ var f; function f() {} }"),
-      njs_str("SyntaxError: \"f\" has already been declared in 1") },
+      njs_str("SyntaxError: \"f\" has already been declared") },
 
     { njs_str("{ function f() {} var f; }"),
-      njs_str("SyntaxError: \"f\" has already been declared in 1") },
+      njs_str("SyntaxError: \"f\" has already been declared") },
 
     { njs_str("{ function f() {} { var f }}"),
-      njs_str("SyntaxError: \"f\" has already been declared in 1") },
+      njs_str("SyntaxError: \"f\" has already been declared") },
 
 #if NJS_HAVE_LARGE_STACK
     { njs_str("function f() { return f() } f()"),
@@ -10229,7 +10229,7 @@ static njs_unit_test_t  njs_test[] =
 #endif
 
     { njs_str("function () { } f()"),
-      njs_str("SyntaxError: Unexpected token \"(\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"(\"") },
 
     { njs_str("function f() { }"),
       njs_str("undefined") },
@@ -10248,25 +10248,25 @@ static njs_unit_test_t  njs_test[] =
       njs_str("0") },
 
     { njs_str("function f(a,a) { };"),
-      njs_str("SyntaxError: Duplicate parameter names in 1") },
+      njs_str("SyntaxError: Duplicate parameter names") },
 
     { njs_str("function f(a,b,a) { };"),
-      njs_str("SyntaxError: Duplicate parameter names in 1") },
+      njs_str("SyntaxError: Duplicate parameter names") },
 
     { njs_str("function f(a, ...a) { };"),
-      njs_str("SyntaxError: Duplicate parameter names in 1") },
+      njs_str("SyntaxError: Duplicate parameter names") },
 
     { njs_str("(function(a,a) { })"),
-      njs_str("SyntaxError: Duplicate parameter names in 1") },
+      njs_str("SyntaxError: Duplicate parameter names") },
 
     { njs_str("(function(a,...a) { })"),
-      njs_str("SyntaxError: Duplicate parameter names in 1") },
+      njs_str("SyntaxError: Duplicate parameter names") },
 
     { njs_str("(function f(a,a) { })"),
-      njs_str("SyntaxError: Duplicate parameter names in 1") },
+      njs_str("SyntaxError: Duplicate parameter names") },
 
     { njs_str("(function f(a,...a) { })"),
-      njs_str("SyntaxError: Duplicate parameter names in 1") },
+      njs_str("SyntaxError: Duplicate parameter names") },
 
     { njs_str("function f(a,b) { }; f.length"),
       njs_str("2") },
@@ -10275,10 +10275,10 @@ static njs_unit_test_t  njs_test[] =
       njs_str("1") },
 
     { njs_str("function f(...) {}"),
-      njs_str("SyntaxError: Unexpected token \")\" in 1") },
+      njs_str("SyntaxError: Unexpected token \")\"") },
 
     { njs_str("(function (...) {})()"),
-      njs_str("SyntaxError: Unexpected token \")\" in 1") },
+      njs_str("SyntaxError: Unexpected token \")\"") },
 
     { njs_str("function f(a,b) { }; var ff = f.bind(f, 1); ff.length"),
       njs_str("1") },
@@ -10335,7 +10335,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("1") },
 
     { njs_str("(function f() { return 2.toString(); })()"),
-      njs_str("SyntaxError: Unexpected token \"2.toString\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"2.toString\"") },
 
     { njs_str("(function f() { return 2..toString(); })()"),
       njs_str("2") },
@@ -10508,10 +10508,10 @@ static njs_unit_test_t  njs_test[] =
       njs_str("function") },
 
     { njs_str("function let() {}"),
-      njs_str("SyntaxError: Unexpected token \"let\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"let\"") },
 
     { njs_str("function static() {}"),
-      njs_str("SyntaxError: Unexpected token \"static\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"static\"") },
 
     { njs_str("var arr = [];"
               "function fn(one) {"
@@ -10864,7 +10864,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("20") },
 
     { njs_str("var f = function b(a) { a *= 2; return a } = 5"),
-      njs_str("ReferenceError: Invalid left-hand side in assignment in 1") },
+      njs_str("ReferenceError: Invalid left-hand side in assignment") },
 
     { njs_str("function a() { return { x:2} }; var b = a(); b.x"),
       njs_str("2") },
@@ -10915,7 +10915,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("3") },
 
     { njs_str("var a = 0, function(a) { return a + 1 }(2); a"),
-      njs_str("SyntaxError: Unexpected token \"function\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"function\"") },
 
     { njs_str("var a = (0, function(a) { return a + 1 }(2)); a"),
       njs_str("3") },
@@ -11401,22 +11401,22 @@ static njs_unit_test_t  njs_test[] =
     /* arguments object. */
 
     { njs_str("arguments"),
-      njs_str("SyntaxError: \"arguments\" object in global scope in 1") },
+      njs_str("SyntaxError: \"arguments\" object in global scope") },
 
     { njs_str("{arguments}"),
-      njs_str("SyntaxError: \"arguments\" object in global scope in 1") },
+      njs_str("SyntaxError: \"arguments\" object in global scope") },
 
     { njs_str("var arguments"),
-      njs_str("SyntaxError: Identifier \"arguments\" is forbidden in var declaration in 1") },
+      njs_str("SyntaxError: Identifier \"arguments\" is forbidden in var declaration") },
 
     { njs_str("for (var arguments in []) {}"),
-      njs_str("SyntaxError: Identifier \"arguments\" is forbidden in var declaration in 1") },
+      njs_str("SyntaxError: Identifier \"arguments\" is forbidden in var declaration") },
 
     { njs_str("function arguments(){}"),
-      njs_str("SyntaxError: Identifier \"arguments\" is forbidden in function declaration in 1") },
+      njs_str("SyntaxError: Identifier \"arguments\" is forbidden in function declaration") },
 
     { njs_str("(function () {arguments = [];})"),
-      njs_str("SyntaxError: Identifier \"arguments\" is forbidden as left-hand in assignment in 1") },
+      njs_str("SyntaxError: Identifier \"arguments\" is forbidden as left-hand in assignment") },
 
     { njs_str("(function(){return arguments;})()"),
       njs_str("[object Arguments]") },
@@ -11520,7 +11520,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("3,4,5") },
 
     { njs_str("function myFoo(a,b,...other, c) { return other };"),
-      njs_str("SyntaxError: Rest parameter must be last formal parameter in 1") },
+      njs_str("SyntaxError: Rest parameter must be last formal parameter") },
 
     { njs_str("function sum(a, b, c, ...other) { return a+b+c+other[2] };"
                  "sum(\"one \",2,\" three \",\"four \",\"five \",\"the long enough sixth argument \");"),
@@ -11556,16 +11556,16 @@ static njs_unit_test_t  njs_test[] =
     /* arrow functions. */
 
     { njs_str("()"),
-      njs_str("SyntaxError: Unexpected token \")\" in 1") },
+      njs_str("SyntaxError: Unexpected token \")\"") },
 
     { njs_str("() => "),
-      njs_str("SyntaxError: Unexpected end of input in 1") },
+      njs_str("SyntaxError: Unexpected end of input") },
 
     { njs_str("() => {"),
-      njs_str("SyntaxError: Unexpected end of input in 1") },
+      njs_str("SyntaxError: Unexpected end of input") },
 
     { njs_str("a\n => 1"),
-      njs_str("SyntaxError: Unexpected token \"=>\" in 2") },
+      njs_str("SyntaxError: Unexpected token \"=>\"") },
 
     { njs_str("new (()=>1)"),
       njs_str("TypeError: function is not a constructor")},
@@ -11724,13 +11724,13 @@ static njs_unit_test_t  njs_test[] =
     /* RegExp. */
 
     { njs_str("/"),
-      njs_str("SyntaxError: Unterminated RegExp \"/\" in 1") },
+      njs_str("SyntaxError: Unterminated RegExp \"/\"") },
 
     { njs_str("/a\n/"),
-      njs_str("SyntaxError: Unterminated RegExp \"/a\" in 1") },
+      njs_str("SyntaxError: Unterminated RegExp \"/a\"") },
 
     { njs_str("/a\r/"),
-      njs_str("SyntaxError: Unterminated RegExp \"/a\" in 1") },
+      njs_str("SyntaxError: Unterminated RegExp \"/a\"") },
 
 #ifndef NJS_HAVE_PCRE2
     { njs_str("/a\\q/"),
@@ -11741,7 +11741,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("/\\\\/") },
 
     { njs_str("/\\\\\\/"),
-      njs_str("SyntaxError: Unterminated RegExp \"/\\\\\\/\" in 1") },
+      njs_str("SyntaxError: Unterminated RegExp \"/\\\\\\/\"") },
 
     { njs_str("/\\\\\\\\/"),
       njs_str("/\\\\\\\\/") },
@@ -11759,16 +11759,16 @@ static njs_unit_test_t  njs_test[] =
       njs_str("/a/y") },
 
     { njs_str("/[A-Z\n]/"),
-      njs_str("SyntaxError: Unterminated RegExp \"/[A-Z\" in 1") },
+      njs_str("SyntaxError: Unterminated RegExp \"/[A-Z\"") },
 
     { njs_str("/[A-Z\\\n]/"),
-      njs_str("SyntaxError: Unterminated RegExp \"/[A-Z\\\" in 1") },
+      njs_str("SyntaxError: Unterminated RegExp \"/[A-Z\\\"") },
 
     { njs_str("/\\\n/"),
-      njs_str("SyntaxError: Unterminated RegExp \"/\\\" in 1") },
+      njs_str("SyntaxError: Unterminated RegExp \"/\\\"") },
 
     { njs_str("/./x"),
-      njs_str("SyntaxError: Invalid RegExp flags \"x\" in 1") },
+      njs_str("SyntaxError: Invalid RegExp flags \"x\"") },
 
     { njs_str("/./.exec === RegExp.prototype.exec"),
       njs_str("true") },
@@ -11801,8 +11801,8 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("/(/.test('')"),
       njs_str("SyntaxError: "
-              njs_pcre_var("pcre_compile2(\"(\") failed: missing closing parenthesis at \"\" in 1",
-                           "pcre_compile(\"(\") failed: missing ) in 1")) },
+              njs_pcre_var("pcre_compile2(\"(\") failed: missing closing parenthesis at \"\"",
+                           "pcre_compile(\"(\") failed: missing )")) },
 
     { njs_str("/+/.test('')"),
       njs_str("SyntaxError: "
@@ -12066,16 +12066,16 @@ static njs_unit_test_t  njs_test[] =
 #endif
 
     { njs_str("/Ca++BB/"),
-      njs_str("SyntaxError: Invalid regular expression \"Ca++BB\" nothing to repeat in 1") },
+      njs_str("SyntaxError: Invalid regular expression \"Ca++BB\" nothing to repeat") },
 
     { njs_str("/a*+/"),
-      njs_str("SyntaxError: Invalid regular expression \"a*+\" nothing to repeat in 1") },
+      njs_str("SyntaxError: Invalid regular expression \"a*+\" nothing to repeat") },
 
     { njs_str("/a?+/"),
-      njs_str("SyntaxError: Invalid regular expression \"a?+\" nothing to repeat in 1") },
+      njs_str("SyntaxError: Invalid regular expression \"a?+\" nothing to repeat") },
 
     { njs_str(" /\\[[]++\\]/"),
-      njs_str("SyntaxError: Invalid regular expression \"\\[[]++\\]\" nothing to repeat in 1") },
+      njs_str("SyntaxError: Invalid regular expression \"\\[[]++\\]\" nothing to repeat") },
 
     { njs_str("/\\?+/"),
       njs_str("/\\?+/") },
@@ -12386,7 +12386,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("Error: e2") },
 
     { njs_str("try { throw null } catch (null) { throw e }"),
-      njs_str("SyntaxError: Unexpected token \"null\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"null\"") },
 
     { njs_str("'a'.f()"),
       njs_str("TypeError: (intermediate value)[\"f\"] is not a function") },
@@ -12395,10 +12395,10 @@ static njs_unit_test_t  njs_test[] =
       njs_str("TypeError: (intermediate value)[\"f\"] is not a function") },
 
     { njs_str("try {}"),
-      njs_str("SyntaxError: Missing catch or finally after try in 1") },
+      njs_str("SyntaxError: Missing catch or finally after try") },
 
     { njs_str("try{}catch(a[]"),
-      njs_str("SyntaxError: Unexpected token \"[\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"[\"") },
 
     { njs_str("function f(a) {return a;}; "
                  "function thrower() {throw TypeError('Oops')}; "
@@ -12448,7 +12448,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("8") },
 
     { njs_str("throw\nnull"),
-      njs_str("SyntaxError: Illegal newline after throw in 2") },
+      njs_str("SyntaxError: Illegal newline after throw") },
 
     { njs_str("for (var x in [1,2]) { try{ continue; } catch(e) {} } throw 1"),
       njs_str("1") },
@@ -12457,7 +12457,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("1") },
 
     { njs_str("try\n {\n continue; } catch(e) {}"),
-      njs_str("SyntaxError: Illegal continue statement in 3") },
+      njs_str("SyntaxError: Illegal continue statement") },
 
     { njs_str("var a = 1; "
                  "switch (a) {"
@@ -12465,25 +12465,25 @@ static njs_unit_test_t  njs_test[] =
                  "  try\n {\n continue; } "
                  "  catch(e) {}"
                  "}"),
-      njs_str("SyntaxError: Illegal continue statement in 3") },
+      njs_str("SyntaxError: Illegal continue statement") },
 
     { njs_str("try\n {\n break; } catch(e) {}"),
-      njs_str("SyntaxError: Illegal break statement in 3") },
+      njs_str("SyntaxError: Illegal break statement") },
 
     { njs_str("try\n { }\n catch(e) {continue;}"),
-      njs_str("SyntaxError: Illegal continue statement in 3") },
+      njs_str("SyntaxError: Illegal continue statement") },
 
     { njs_str("try { } catch(e) {break;}"),
-      njs_str("SyntaxError: Illegal break statement in 1") },
+      njs_str("SyntaxError: Illegal break statement") },
 
     { njs_str("try { continue; } finally {}"),
-      njs_str("SyntaxError: Illegal continue statement in 1") },
+      njs_str("SyntaxError: Illegal continue statement") },
 
     { njs_str("try { break; } finally {}"),
-      njs_str("SyntaxError: Illegal break statement in 1") },
+      njs_str("SyntaxError: Illegal break statement") },
 
     { njs_str("try\n {\n try\n {\n continue; } finally {} } finally {}"),
-      njs_str("SyntaxError: Illegal continue statement in 5") },
+      njs_str("SyntaxError: Illegal continue statement") },
 
     /* break from try in try/catch. */
 
@@ -13180,13 +13180,13 @@ static njs_unit_test_t  njs_test[] =
       njs_str("a") },
 
     { njs_str("({__proto__:null, __proto__: null})"),
-      njs_str("SyntaxError: Duplicate __proto__ fields are not allowed in object literals in 1") },
+      njs_str("SyntaxError: Duplicate __proto__ fields are not allowed in object literals") },
 
     { njs_str("({__proto__:null, '__proto__': null})"),
-      njs_str("SyntaxError: Duplicate __proto__ fields are not allowed in object literals in 1") },
+      njs_str("SyntaxError: Duplicate __proto__ fields are not allowed in object literals") },
 
     { njs_str("({__proto__:null, '\\x5f_proto__': null})"),
-      njs_str("SyntaxError: Duplicate __proto__ fields are not allowed in object literals in 1") },
+      njs_str("SyntaxError: Duplicate __proto__ fields are not allowed in object literals") },
 
     { njs_str("var __proto__ = 'a'; ({__proto__}).__proto__"),
       njs_str("a") },
@@ -14340,22 +14340,22 @@ static njs_unit_test_t  njs_test[] =
       njs_str("true") },
 
     { njs_str("new Function('('.repeat(2**13));"),
-      njs_str("SyntaxError: Unexpected token \"}\" in runtime") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("new Function('{'.repeat(2**13));"),
-      njs_str("SyntaxError: Unexpected token \")\" in runtime") },
+      njs_str("SyntaxError: Unexpected token \")\"") },
 
     { njs_str("new Function('['.repeat(2**13));"),
-      njs_str("SyntaxError: Unexpected token \"}\" in runtime") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("new Function('`'.repeat(2**13));"),
       njs_str("[object Function]") },
 
     { njs_str("new Function('{['.repeat(2**13));"),
-      njs_str("SyntaxError: Unexpected token \"}\" in runtime") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("new Function('{;'.repeat(2**13));"),
-      njs_str("SyntaxError: Unexpected token \")\" in runtime") },
+      njs_str("SyntaxError: Unexpected token \")\"") },
 
     { njs_str("(new Function('1;'.repeat(2**13) + 'return 2'))()"),
       njs_str("2") },
@@ -14367,7 +14367,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("-4") },
 
     { njs_str("new Function('new '.repeat(2**13));"),
-      njs_str("SyntaxError: Unexpected token \"}\" in runtime") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("(new Function('return ' + 'typeof '.repeat(2**13) + 'x'))()"),
       njs_str("string") },
@@ -14433,10 +14433,10 @@ static njs_unit_test_t  njs_test[] =
       njs_str("ReferenceError: \"foo\" is not defined") },
 
     { njs_str("this.NN = {}; var f = Function('eval = 42;'); f()"),
-      njs_str("SyntaxError: Identifier \"eval\" is forbidden as left-hand in assignment in runtime") },
+      njs_str("SyntaxError: Identifier \"eval\" is forbidden as left-hand in assignment") },
 
     { njs_str("new Function('}); let a; a; function o(){}; //')"),
-      njs_str("SyntaxError: Unexpected token \"}\" in runtime") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("new Function('}); let a; a; function o(){}; ({')"),
       njs_str("SyntaxError: single function literal required") },
@@ -15458,7 +15458,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("InternalError: failed conversion of type \"object\" to string while property define") },
 
     { njs_str("var o = { get foo(v1, v2) { return 'bar'; } }; o.foo"),
-      njs_str("SyntaxError: Getter must not have any formal parameters in 1") },
+      njs_str("SyntaxError: Getter must not have any formal parameters") },
 
     { njs_str("var o = { baz: 'bar', set foo(v) { this.baz = v; } }; o.foo = 'baz'; o.baz"),
       njs_str("baz") },
@@ -15470,7 +15470,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("baz") },
 
     { njs_str("var o = { baz: 'bar', set foo(v1, v2) { this.baz = v; } }; o.foo = 'baz'; o.baz"),
-      njs_str("SyntaxError: Setter must have exactly one formal parameter in 1") },
+      njs_str("SyntaxError: Setter must have exactly one formal parameter") },
 
     { njs_str("var o = { get foo() { return 'bar'; }, set foo(v) { this.baz = v; } }; o.foo"),
       njs_str("bar") },
@@ -18306,10 +18306,10 @@ static njs_unit_test_t  njs_test[] =
       njs_str("undefined") },
 
     { njs_str("1 + debugger"),
-      njs_str("SyntaxError: Unexpected token \"debugger\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"debugger\"") },
 
     { njs_str("debugger + 1"),
-      njs_str("SyntaxError: Unexpected token \"+\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"+\"") },
 
     /* Top-level objects. */
 
@@ -19385,7 +19385,7 @@ static njs_unit_test_t  njs_test[] =
     /* es5id: 8.2_A2 */
 
     { njs_str("var null;"),
-      njs_str("SyntaxError: Unexpected token \"null\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"null\"") },
 
     /* es5id: 8.2_A3 */
 
@@ -19395,28 +19395,28 @@ static njs_unit_test_t  njs_test[] =
     /* Module. */
 
     { njs_str("import * from y"),
-      njs_str("SyntaxError: Non-default import is not supported in 1") },
+      njs_str("SyntaxError: Non-default import is not supported") },
 
     { njs_str("import 'x' from y"),
-      njs_str("SyntaxError: Non-default import is not supported in 1") },
+      njs_str("SyntaxError: Non-default import is not supported") },
 
     { njs_str("import {x} from y"),
-      njs_str("SyntaxError: Non-default import is not supported in 1") },
+      njs_str("SyntaxError: Non-default import is not supported") },
 
     { njs_str("import switch from y"),
-      njs_str("SyntaxError: Unexpected token \"switch\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"switch\"") },
 
     { njs_str("import x from y"),
-      njs_str("SyntaxError: Unexpected token \"y\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"y\"") },
 
     { njs_str("import x from {"),
-      njs_str("SyntaxError: Unexpected token \"{\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"{\"") },
 
     { njs_str("import x from ''"),
-      njs_str("ReferenceError: Cannot load module \"\" in 1") },
+      njs_str("ReferenceError: Cannot load module \"\"") },
 
     { njs_str("export"),
-      njs_str("SyntaxError: Illegal export statement in 1") },
+      njs_str("SyntaxError: Illegal export statement") },
 
     { njs_str("Object.assign(undefined)"),
       njs_str("TypeError: cannot convert null or undefined to object") },
@@ -19488,10 +19488,10 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("var let = 123;"
               "let"),
-      njs_str("SyntaxError: Unexpected token \"let\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"let\"") },
 
     { njs_str("var const = 123"),
-      njs_str("SyntaxError: Unexpected token \"const\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"const\"") },
 
     /* Async */
 
@@ -19517,81 +19517,81 @@ static njs_unit_test_t  njs_test[] =
       njs_str("undefined") },
 
     { njs_str("new\""),
-      njs_str("SyntaxError: Unterminated string \"\"\" in 1") },
+      njs_str("SyntaxError: Unterminated string \"\"\"") },
 
     { njs_str("new\"\\UFFFF"),
-      njs_str("SyntaxError: Unterminated string \"\"\\UFFFF\" in 1") },
+      njs_str("SyntaxError: Unterminated string \"\"\\UFFFF\"") },
 
     { njs_str("new/la"),
-      njs_str("SyntaxError: Unterminated RegExp \"/la\" in 1") },
+      njs_str("SyntaxError: Unterminated RegExp \"/la\"") },
 
     { njs_str("{name; {/ / /}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("[(]"),
-      njs_str("SyntaxError: Unexpected token \"]\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"]\"") },
 
 #if 0 /* TODO spreading support. */
     { njs_str("[...]"),
-      njs_str("SyntaxError: Unexpected token \"]\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"]\"") },
 
     { njs_str("var id = (x) => x, x = id(...[1,2,3]); typeof x"),
       njs_str("number") },
 #endif
 
     { njs_str("switch () {}"),
-      njs_str("SyntaxError: Unexpected token \")\" in 1") },
+      njs_str("SyntaxError: Unexpected token \")\"") },
 
     { njs_str("switch ([(]) {}"),
-      njs_str("SyntaxError: Unexpected token \"]\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"]\"") },
 
     { njs_str("{{}{-}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}{+}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}{delete}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}{++}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}{++1}"),
-      njs_str("ReferenceError: Invalid left-hand side in prefix operation in 1") },
+      njs_str("ReferenceError: Invalid left-hand side in prefix operation") },
 
     { njs_str("{{}{1++}"),
-      njs_str("ReferenceError: Invalid left-hand side in postfix operation in 1") },
+      njs_str("ReferenceError: Invalid left-hand side in postfix operation") },
 
     { njs_str("{{}{1/}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}{1>>}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}{r=}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}{var a = }"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}T=>}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a = b +}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a = b -}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a = b *}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a = b /}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a = b %}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a = b++}"),
       njs_str("ReferenceError: \"a\" is not defined") },
@@ -19600,106 +19600,106 @@ static njs_unit_test_t  njs_test[] =
       njs_str("ReferenceError: \"a\" is not defined") },
 
     { njs_str("{{}a =}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a +=}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a -=}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a *=}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a /=}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a %=}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a ===}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a ==}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a !=}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a !==}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a >}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a <}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a <=}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a &&}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a ||}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a ??}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a &}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a |}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a ^}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a <<}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}a >>}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}new}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}delete}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}void}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{}typeof}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("{{} ({a: 1, b: {}\n}\n})\n}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 3") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("object?."),
-      njs_str("SyntaxError: Unexpected end of input in 1") },
+      njs_str("SyntaxError: Unexpected end of input") },
 
     { njs_str("`${{a: 1, b}}`"),
       njs_str("ReferenceError: \"b\" is not defined") },
 
     { njs_str("`${{a: 1, b:}}`"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("`${{a: 1, b:,}}`"),
-      njs_str("SyntaxError: Unexpected token \",\" in 1") },
+      njs_str("SyntaxError: Unexpected token \",\"") },
 
     { njs_str("`${{a: 1, b: 2,}}`"),
       njs_str("[object Object]") },
 
     { njs_str("`${{a: 1,, b: 2}}`"),
-      njs_str("SyntaxError: Unexpected token \",\" in 1") },
+      njs_str("SyntaxError: Unexpected token \",\"") },
 
     { njs_str("`${{f(){-} - {}}`"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("for (;1-;) {}"),
-      njs_str("SyntaxError: Unexpected token \";\" in 1") },
+      njs_str("SyntaxError: Unexpected token \";\"") },
 
     { njs_str("var str = String(str); str"),
       njs_str("undefined") },
@@ -19740,22 +19740,22 @@ static njs_unit_test_t  njs_test[] =
       njs_str("ReferenceError: cannot access variable before initialization") },
 
     { njs_str("let x; var x"),
-      njs_str("SyntaxError: \"x\" has already been declared in 1") },
+      njs_str("SyntaxError: \"x\" has already been declared") },
 
     { njs_str("var x; let x"),
-      njs_str("SyntaxError: \"x\" has already been declared in 1") },
+      njs_str("SyntaxError: \"x\" has already been declared") },
 
     { njs_str("let x; function x() {}"),
-      njs_str("SyntaxError: \"x\" has already been declared in 1") },
+      njs_str("SyntaxError: \"x\" has already been declared") },
 
     { njs_str("function x() {} let x"),
-      njs_str("SyntaxError: \"x\" has already been declared in 1") },
+      njs_str("SyntaxError: \"x\" has already been declared") },
 
     { njs_str("function x() {let x; var x}"),
-      njs_str("SyntaxError: \"x\" has already been declared in 1") },
+      njs_str("SyntaxError: \"x\" has already been declared") },
 
     { njs_str("function x() {var x; let x}"),
-      njs_str("SyntaxError: \"x\" has already been declared in 1") },
+      njs_str("SyntaxError: \"x\" has already been declared") },
 
     { njs_str("var x = function f() {let f}"),
       njs_str("undefined") },
@@ -19894,16 +19894,16 @@ static njs_unit_test_t  njs_test[] =
       njs_str("ReferenceError: cannot access variable before initialization") },
 
     { njs_str("if (false) let x = 1"),
-      njs_str("SyntaxError: let declaration cannot appear in a single-statement context in 1") },
+      njs_str("SyntaxError: let declaration cannot appear in a single-statement context") },
 
     { njs_str("while (false) let x = 1"),
-      njs_str("SyntaxError: let declaration cannot appear in a single-statement context in 1") },
+      njs_str("SyntaxError: let declaration cannot appear in a single-statement context") },
 
     { njs_str("for (;;) let x = 1"),
-      njs_str("SyntaxError: let declaration cannot appear in a single-statement context in 1") },
+      njs_str("SyntaxError: let declaration cannot appear in a single-statement context") },
 
     { njs_str("try {} catch (e) {let e}"),
-      njs_str("SyntaxError: \"e\" has already been declared in 1") },
+      njs_str("SyntaxError: \"e\" has already been declared") },
 
     { njs_str("let arr = [], x = 2;"
               "switch(true) {default: let x = 1; arr.push(x)}"
@@ -19918,13 +19918,13 @@ static njs_unit_test_t  njs_test[] =
       njs_str("2") },
 
     { njs_str("let null"),
-      njs_str("SyntaxError: Unexpected token \"null\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"null\"") },
 
     { njs_str("let continue"),
-      njs_str("SyntaxError: Unexpected token \"continue\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"continue\"") },
 
     { njs_str("let undefined"),
-      njs_str("SyntaxError: \"undefined\" has already been declared in 1") },
+      njs_str("SyntaxError: \"undefined\" has already been declared") },
 
     { njs_str("let a = 1; globalThis.a"),
       njs_str("undefined") },
@@ -19933,16 +19933,16 @@ static njs_unit_test_t  njs_test[] =
       njs_str("ReferenceError: cannot access variable before initialization") },
 
     { njs_str("let let"),
-      njs_str("SyntaxError: Unexpected token \"let\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"let\"") },
 
     { njs_str("let null"),
-      njs_str("SyntaxError: Unexpected token \"null\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"null\"") },
 
     { njs_str("function let() {}"),
-      njs_str("SyntaxError: Unexpected token \"let\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"let\"") },
 
     { njs_str("function static() {}"),
-      njs_str("SyntaxError: Unexpected token \"static\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"static\"") },
 
     /* const */
 
@@ -19974,25 +19974,25 @@ static njs_unit_test_t  njs_test[] =
       njs_str("ReferenceError: cannot access variable before initialization") },
 
     { njs_str("const x; var x"),
-      njs_str("SyntaxError: \"x\" has already been declared in 1") },
+      njs_str("SyntaxError: \"x\" has already been declared") },
 
     { njs_str("const x; let x"),
-      njs_str("SyntaxError: \"x\" has already been declared in 1") },
+      njs_str("SyntaxError: \"x\" has already been declared") },
 
     { njs_str("let x; const x"),
-      njs_str("SyntaxError: \"x\" has already been declared in 1") },
+      njs_str("SyntaxError: \"x\" has already been declared") },
 
     { njs_str("const x = 1; function x() {}"),
-      njs_str("SyntaxError: \"x\" has already been declared in 1") },
+      njs_str("SyntaxError: \"x\" has already been declared") },
 
     { njs_str("function x() {} const x = 1"),
-      njs_str("SyntaxError: \"x\" has already been declared in 1") },
+      njs_str("SyntaxError: \"x\" has already been declared") },
 
     { njs_str("function x() {const x; var x}"),
-      njs_str("SyntaxError: \"x\" has already been declared in 1") },
+      njs_str("SyntaxError: \"x\" has already been declared") },
 
     { njs_str("function x() {var x; const x}"),
-      njs_str("SyntaxError: \"x\" has already been declared in 1") },
+      njs_str("SyntaxError: \"x\" has already been declared") },
 
     { njs_str("const x = function f() {const f = 1}"),
       njs_str("undefined") },
@@ -20077,16 +20077,16 @@ static njs_unit_test_t  njs_test[] =
       njs_str("ReferenceError: cannot access variable before initialization") },
 
     { njs_str("if (false) const x = 1"),
-      njs_str("SyntaxError: const declaration cannot appear in a single-statement context in 1") },
+      njs_str("SyntaxError: const declaration cannot appear in a single-statement context") },
 
     { njs_str("while (false) const x = 1"),
-      njs_str("SyntaxError: const declaration cannot appear in a single-statement context in 1") },
+      njs_str("SyntaxError: const declaration cannot appear in a single-statement context") },
 
     { njs_str("for (;;) const x = 1"),
-      njs_str("SyntaxError: const declaration cannot appear in a single-statement context in 1") },
+      njs_str("SyntaxError: const declaration cannot appear in a single-statement context") },
 
     { njs_str("try {} catch (e) {const e = 1}"),
-      njs_str("SyntaxError: \"e\" has already been declared in 1") },
+      njs_str("SyntaxError: \"e\" has already been declared") },
 
     { njs_str("let arr = []; const x = 2;"
               "switch(true) {default: const x = 1; arr.push(x)}"
@@ -20098,13 +20098,13 @@ static njs_unit_test_t  njs_test[] =
       njs_str("TypeError: assignment to constant variable") },
 
     { njs_str("const null"),
-      njs_str("SyntaxError: Unexpected token \"null\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"null\"") },
 
     { njs_str("const continue"),
-      njs_str("SyntaxError: Unexpected token \"continue\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"continue\"") },
 
     { njs_str("const undefined"),
-      njs_str("SyntaxError: \"undefined\" has already been declared in 1") },
+      njs_str("SyntaxError: \"undefined\" has already been declared") },
 
     { njs_str("const a = 1; globalThis.a"),
       njs_str("undefined") },
@@ -20113,7 +20113,7 @@ static njs_unit_test_t  njs_test[] =
       njs_str("ReferenceError: cannot access variable before initialization") },
 
     { njs_str("const const"),
-      njs_str("SyntaxError: Unexpected token \"const\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"const\"") },
 
     /* Async/Await */
 
@@ -20124,13 +20124,13 @@ static njs_unit_test_t  njs_test[] =
       njs_str("undefined") },
 
     { njs_str("function f() {await 1}"),
-      njs_str("SyntaxError: await is only valid in async functions in 1") },
+      njs_str("SyntaxError: await is only valid in async functions") },
 
     { njs_str("async function f() {function a() {await 1}}"),
-      njs_str("SyntaxError: await is only valid in async functions in 1") },
+      njs_str("SyntaxError: await is only valid in async functions") },
 
     { njs_str("async function f() {() => {await 1}}"),
-      njs_str("SyntaxError: await is only valid in async functions in 1") },
+      njs_str("SyntaxError: await is only valid in async functions") },
 
     { njs_str("function f() {async () => {await 1}}"),
       njs_str("undefined") },
@@ -20139,13 +20139,13 @@ static njs_unit_test_t  njs_test[] =
       njs_str("undefined") },
 
     { njs_str("let f = () => {await 1}"),
-      njs_str("SyntaxError: await is only valid in async functions in 1") },
+      njs_str("SyntaxError: await is only valid in async functions") },
 
     { njs_str("(async function() {await 1})"),
       njs_str("[object AsyncFunction]") },
 
     { njs_str("(function() {await 1})"),
-      njs_str("SyntaxError: await is only valid in async functions in 1") },
+      njs_str("SyntaxError: await is only valid in async functions") },
 
     { njs_str("let ctor = Object.getPrototypeOf(async function(){}).constructor;"
               "ctor"),
@@ -20160,43 +20160,43 @@ static njs_unit_test_t  njs_test[] =
       njs_str("[object AsyncFunction]") },
 
     { njs_str("let f = new Function('x', 'await 1; return x'); f(1)"),
-      njs_str("SyntaxError: await is only valid in async functions in runtime") },
+      njs_str("SyntaxError: await is only valid in async functions") },
 
     { njs_str("new AsyncFunction()"),
       njs_str("ReferenceError: \"AsyncFunction\" is not defined") },
 
     { njs_str("(async function() {console.log(await 111)})"),
-      njs_str("SyntaxError: await in arguments not supported in 1") },
+      njs_str("SyntaxError: await in arguments not supported") },
 
     { njs_str("(async function() {console.log('Number: ' + await 111)})"),
-      njs_str("SyntaxError: await in arguments not supported in 1") },
+      njs_str("SyntaxError: await in arguments not supported") },
 
     { njs_str("(async function() {f(await 111)})"),
-      njs_str("SyntaxError: await in arguments not supported in 1") },
+      njs_str("SyntaxError: await in arguments not supported") },
 
     { njs_str("(async function() {f(f(1), await 111)})"),
-      njs_str("SyntaxError: await in arguments not supported in 1") },
+      njs_str("SyntaxError: await in arguments not supported") },
 
     { njs_str("async () => [await x(1)(),]; async () => [await x(1)()]"),
       njs_str("[object AsyncFunction]") },
 
     { njs_str("(async function() {f(1, 'a', await 111)})"),
-      njs_str("SyntaxError: await in arguments not supported in 1") },
+      njs_str("SyntaxError: await in arguments not supported") },
 
     { njs_str("(async function() {f('Number: ' + await 111)})"),
-      njs_str("SyntaxError: await in arguments not supported in 1") },
+      njs_str("SyntaxError: await in arguments not supported") },
 
     { njs_str("async function f1() {try {f(await f1)} catch(e) {}}"),
-      njs_str("SyntaxError: await in arguments not supported in 1") },
+      njs_str("SyntaxError: await in arguments not supported") },
 
     { njs_str("(async () => (function (){}) `${(async () => 1)(await 1)}`)()"),
-      njs_str("SyntaxError: await in arguments not supported in 1") },
+      njs_str("SyntaxError: await in arguments not supported") },
 
     { njs_str("(async () => (function (){}) `${await 1}`)()"),
-      njs_str("SyntaxError: await in tagged template not supported in 1") },
+      njs_str("SyntaxError: await in tagged template not supported") },
 
     { njs_str("async function af() {await encrypt({},}"),
-      njs_str("SyntaxError: Unexpected token \"}\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"}\"") },
 
     { njs_str("let x = {async af() {await Promise.resolve(1)}}; x.af"),
       njs_str("[object AsyncFunction]") },
@@ -20579,19 +20579,19 @@ static njs_unit_test_t  njs_fs_module_test[] =
 static njs_unit_test_t  njs_module_test[] =
 {
     { njs_str("function f(){return 2}; var f; f()"),
-      njs_str("SyntaxError: \"f\" has already been declared in 1") },
+      njs_str("SyntaxError: \"f\" has already been declared") },
 
     { njs_str("function f(){return 2}; var f = 1; f()"),
-      njs_str("SyntaxError: \"f\" has already been declared in 1") },
+      njs_str("SyntaxError: \"f\" has already been declared") },
 
     { njs_str("function f(){return 1}; function f(){return 2}; f()"),
-      njs_str("SyntaxError: \"f\" has already been declared in 1") },
+      njs_str("SyntaxError: \"f\" has already been declared") },
 
     { njs_str("var f = 1; function f() {};"),
-      njs_str("SyntaxError: \"f\" has already been declared in 1") },
+      njs_str("SyntaxError: \"f\" has already been declared") },
 
     { njs_str("{ var f = 1; } function f() {};"),
-      njs_str("SyntaxError: \"f\" has already been declared in 1") },
+      njs_str("SyntaxError: \"f\" has already been declared") },
 
     { njs_str("function f(v) {var f = v;}; f(1); f"),
       njs_str("[object Function]") },
@@ -21332,7 +21332,7 @@ static njs_unit_test_t  njs_regexp_optional_tests[] =
       njs_str("тест") },
 
     { njs_str("/[\\uFDE0-\\uFFFD]/g; export default 1"),
-      njs_str("SyntaxError: Illegal export statement in 1") },
+      njs_str("SyntaxError: Illegal export statement") },
 
     { njs_str("RegExp(RegExp('\x00]]')).test('\x00]]')"),
       njs_str("true") },
@@ -21475,7 +21475,7 @@ static njs_unit_test_t  njs_shell_test[] =
       njs_str("4") },
 
     { njs_str("function f() { return b;" ENTER),
-      njs_str("SyntaxError: Unexpected end of input in 1") },
+      njs_str("SyntaxError: Unexpected end of input") },
 
     { njs_str("function f() { return b;" ENTER
                "2 + 2" ENTER),
@@ -21501,7 +21501,7 @@ static njs_unit_test_t  njs_shell_test[] =
 
     { njs_str("arguments" ENTER
               "function(){}()" ENTER),
-      njs_str("SyntaxError: Unexpected token \"(\" in 1") },
+      njs_str("SyntaxError: Unexpected token \"(\"") },
 
     { njs_str("var o = { toString: function() { return [1] } }; o" ENTER),
       njs_str("{\n toString: [Function: toString]\n}") },
@@ -21597,7 +21597,7 @@ static njs_unit_test_t  njs_backtraces_test[] =
               "    at main (:1)\n") },
 
     { njs_str("new Function(\n\n@)"),
-      njs_str("SyntaxError: Unexpected token \"@\" in 3") },
+      njs_str("SyntaxError: Unexpected token \"@\"") },
 
     { njs_str("require()"),
       njs_str("TypeError: missing path\n"
@@ -21685,6 +21685,15 @@ static njs_unit_test_t  njs_backtraces_test[] =
 
     { njs_str("var e = new Error('oops'); e.stack = 123; e.stack"),
       njs_str("123") },
+
+    { njs_str("function fa () {Function('aa','bb cc')};"
+              "function fb () {fa()}"
+              "fb()"),
+      njs_str("SyntaxError: Unexpected token \"cc\"\n"
+              "    at Function (native)\n"
+              "    at fa (:1)\n"
+              "    at fb (:1)\n"
+              "    at main (:1)\n") },
 
     /* line numbers */
 

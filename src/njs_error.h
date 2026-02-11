@@ -44,6 +44,8 @@ njs_int_t njs_error_to_string(njs_vm_t *vm, njs_value_t *retval,
     const njs_value_t *error);
 njs_int_t njs_error_stack(njs_vm_t *vm, njs_value_t *value, njs_value_t *stack);
 void njs_error_stack_attach(njs_vm_t *vm, njs_value_t value, njs_uint_t skip);
+void njs_error_stack_set(njs_vm_t *vm, njs_value_t *value, njs_str_t *file,
+    njs_int_t line);
 
 
 extern const njs_object_type_init_t  njs_error_type_init;

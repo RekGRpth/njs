@@ -217,6 +217,34 @@ njs_error_stack_attach(njs_vm_t *vm, njs_value_t value, njs_uint_t skip)
 }
 
 
+void
+njs_error_stack_set(njs_vm_t *vm, njs_value_t *value, njs_str_t *file,
+    njs_int_t line)
+{
+    njs_chb_t    chain;
+    njs_value_t  *stackval;
+
+    if (njs_slow_path(!vm->options.backtrace
+                      || !njs_is_error(value))
+                      || njs_object(value)->stack_attached)
+    {
+        return;
+    }
+
+    NJS_CHB_MP_INIT(&chain, vm->mem_pool);
+
+    njs_chb_sprintf(&chain, njs_length("    at :\n") + NJS_INT_T_LEN
+                            + file->length,
+                    "    at %V:%uD\n", file, line);
+
+    stackval = njs_object_value(value);
+
+    (void) njs_string_create_chb(vm, stackval, &chain);
+
+    njs_chb_destroy(&chain);
+}
+
+
 njs_int_t
 njs_error_stack(njs_vm_t *vm, njs_value_t *value, njs_value_t *stack)
 {

@@ -55,7 +55,7 @@ interface  HmacImportParams {
     hash: HashVariants;
 }
 
-type AesVariants = "AES-CTR" | "AES-CBC" | "AES-GCM";
+type AesVariants = "AES-CTR" | "AES-CBC" | "AES-GCM" | "AES-KW";
 
 interface  AesImportParams {
     name: AesVariants;
@@ -69,7 +69,9 @@ type ImportAlgorithm =
     | AesVariants
     | "PBKDF2"
     | "HKDF"
-    | "ECDH";
+    | "ECDH"
+    | "Ed25519"
+    | "X25519";
 
 type GenerateAlgorithm =
     | RsaHashedKeyGenParams
@@ -80,7 +82,8 @@ type GenerateAlgorithm =
 type JWK =
     | { kty: "RSA"; }
     | { kty: "EC"; }
-    | { kty: "oct"; };
+    | { kty: "oct"; }
+    | { kty: "OKP"; };
 
 type KeyData =
     | NjsStringOrBuffer
@@ -105,10 +108,16 @@ interface   EcdhParams {
     public: CryptoKey;
 }
 
+interface   X25519Params {
+    name: "X25519";
+    public: CryptoKey;
+}
+
 type DeriveAlgorithm =
     | HkdfParams
     | Pbkdf2Params
-    | EcdhParams;
+    | EcdhParams
+    | X25519Params;
 
 interface   HmacKeyGenParams {
     name: "HMAC";
@@ -140,7 +149,8 @@ type SignOrVerifyAlgorithm =
     | { name: "HMAC"; }
     | { name: "RSASSA-PKCS1-v1_5"; }
     | "HMAC"
-    | "RSASSA-PKCS1-v1_5";
+    | "RSASSA-PKCS1-v1_5"
+    | "Ed25519";
 
 interface CryptoKey {
     /*
@@ -294,7 +304,8 @@ interface SubtleCrypto {
      *  Possible array values: "encrypt", "decrypt", "sign", "verify",
      *  "deriveKey", "deriveBits", "wrapKey", "unwrapKey".
      */
-    generateKey(algorithm: RsaHashedKeyGenParams | EcKeyGenParams,
+    generateKey(algorithm: RsaHashedKeyGenParams | EcKeyGenParams
+                         | "Ed25519" | "X25519",
                 extractable: boolean,
                 usage: Array<string>): Promise<CryptoKeyPair>;
 
@@ -323,11 +334,25 @@ interface SubtleCrypto {
            key: CryptoKey,
            signature: NjsStringOrBuffer,
            data: NjsStringOrBuffer): Promise<boolean>;
+
+    wrapKey(format: "raw" | "pkcs8" | "spki" | "jwk",
+            key: CryptoKey,
+            wrappingKey: CryptoKey,
+            wrapAlgorithm: CipherAlgorithm | "AES-KW"): Promise<ArrayBuffer>;
+
+    unwrapKey(format: "raw" | "pkcs8" | "spki" | "jwk",
+              wrappedKey: NjsStringOrBuffer,
+              unwrappingKey: CryptoKey,
+              unwrapAlgorithm: CipherAlgorithm | "AES-KW",
+              unwrappedKeyAlgorithm: ImportAlgorithm,
+              extractable: boolean,
+              keyUsages: Array<string>): Promise<CryptoKey>;
 }
 
 interface Crypto {
     readonly subtle: SubtleCrypto;
     getRandomValues(ta:TypedArray): TypedArray;
+    randomUUID(): string;
 }
 
 declare const crypto: Crypto;

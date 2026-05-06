@@ -273,6 +273,24 @@ interface NginxHTTPSendBufferOptions {
     flush?: boolean
 }
 
+/**
+ * @since 0.9.9
+ */
+interface NginxHTTPRequestFormFile {
+    readonly name: string;
+}
+
+type NginxHTTPRequestFormValue = string | NginxHTTPRequestFormFile;
+
+interface NginxHTTPRequestForm {
+    get(name: NjsStringOrBuffer): NginxHTTPRequestFormValue | null;
+    getAll(name: NjsStringOrBuffer): NginxHTTPRequestFormValue[];
+    has(name: NjsStringOrBuffer): boolean;
+    forEach(callback: (value: NginxHTTPRequestFormValue, key: string,
+        form: NginxHTTPRequestForm) => void, thisArg?: any): void;
+    hasFiles(): boolean;
+}
+
 interface NginxHTTPRequest {
     /**
      * Request arguments object.
@@ -382,6 +400,68 @@ interface NginxHTTPRequest {
      */
     readonly requestBody?: string;
     /**
+     * Reads the client request body and returns a Promise resolving
+     * with the body as a string.
+     *
+     * Available in js_access and js_content directives.  The request body
+     * size is limited by client_max_body_size.
+     *
+     * The body is read once and cached on the request: subsequent reads
+     * across any combination of `readRequestText`, `readRequestArrayBuffer`,
+     * `readRequestJSON`, and `readRequestForm` resolve synchronously from
+     * the cache and do not re-read the wire.  This deliberately differs
+     * from the WHATWG Fetch Body mixin (which makes the body unusable
+     * after the first call) and matches the server-side caching pattern
+     * used by Express, Flask, and similar frameworks.
+     *
+     * A second call issued while a previous `readRequest*` promise has
+     * not yet resolved throws `"request body is already being read"`.
+     *
+     * @returns A Promise that resolves with the request body as a string.
+     * @since 0.9.9
+     */
+    readRequestText(): Promise<string>;
+    /**
+     * Reads the client request body and returns a Promise resolving
+     * with the body as an ArrayBuffer.  See {@link readRequestText} for
+     * caching, concurrency, and availability semantics.
+     *
+     * @returns A Promise that resolves with the request body
+     *   as an ArrayBuffer.
+     * @since 0.9.9
+     */
+    readRequestArrayBuffer(): Promise<ArrayBuffer>;
+    /**
+     * Reads the client request body and returns a Promise resolving
+     * with the body parsed as JSON.  See {@link readRequestText} for
+     * caching, concurrency, and availability semantics.
+     *
+     * @returns A Promise that resolves with the parsed JSON value.
+     * @since 0.9.9
+     */
+    readRequestJSON(): Promise<any>;
+    /**
+     * Reads the client request body and parses it as a supported HTML form.
+     *
+     * Supports `application/x-www-form-urlencoded` and
+     * `multipart/form-data`.
+     *
+     * For text fields, the value is the decoded string.  For file parts,
+     * the value is a File-like object exposing only the client-supplied
+     * filename via `name`.  File contents are not exposed in this release.
+     *
+     * Filename is client-supplied and not sanitized - validate it before
+     * using it for filesystem paths, log lines, or redirects.
+     *
+     * See {@link readRequestText} for body caching, concurrency, and
+     * availability semantics.  In addition, the parsed form is itself
+     * cached: a second call returns the same parsed result and ignores
+     * any new options argument.
+     *
+     * @since 0.9.9
+     */
+    readRequestForm(options?: { maxKeys?: number }): Promise<NginxHTTPRequestForm>;
+    /**
      * Subrequest response body. The size of response body is limited by
      * the subrequest_output_buffer_size directive.
      *
@@ -414,6 +494,13 @@ interface NginxHTTPRequest {
      * @param body Respose body.
      */
     return(status: number, body?: NjsStringOrBuffer): void;
+    /**
+     * Signals that the handler has no opinion about whether access
+     * should be allowed or denied.  Useful with the ``satisfy any``
+     * directive: without this call the handler implicitly allows
+     * access (returns NGX_OK to the access phase checker).
+     */
+    decline(): void;
     /**
      * Sends a part of the response body to the client.
      */

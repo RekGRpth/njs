@@ -6475,6 +6475,9 @@ ngx_http_qjs_ext_log(JSContext *cx, JSValueConst this_val, int argc,
 
     for (n = 0; n < argc; n++) {
         msg = JS_ToCString(cx, argv[n]);
+        if (msg == NULL) {
+            return JS_EXCEPTION;
+        }
 
         ngx_js_logger(r->connection, level, (u_char *) msg, ngx_strlen(msg));
 
@@ -8150,6 +8153,7 @@ ngx_http_qjs_variables_own_property(JSContext *cx, JSPropertyDescriptor *pdesc,
     } else {
         name_lc.data = ngx_pnalloc(r->pool, name.len);
         if (name_lc.data == NULL) {
+            JS_FreeCString(cx, (char *) name.data);
             (void) JS_ThrowOutOfMemory(cx);
             return -1;
         }
@@ -8211,6 +8215,7 @@ ngx_http_qjs_variables_set_property(JSContext *cx, JSValueConst obj,
     } else {
         lowcase_key = ngx_pnalloc(r->pool, name.len);
         if (lowcase_key == NULL) {
+            JS_FreeCString(cx, (char *) name.data);
             (void) JS_ThrowOutOfMemory(cx);
             return -1;
         }

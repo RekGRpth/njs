@@ -319,6 +319,12 @@ ngx_qjs_ext_fetch(JSContext *cx, JSValueConst this_val, int argc,
 #endif
     }
 
+#if (NGX_SSL)
+    if (http->ssl != NULL && !http->ssl_verify) {
+        http->keepalive = 0;
+    }
+#endif
+
     if (request.method.len == 4
         && ngx_strncasecmp(request.method.data, (u_char *) "HEAD", 4) == 0)
     {
@@ -356,6 +362,11 @@ ngx_qjs_ext_fetch(JSContext *cx, JSValueConst this_val, int argc,
 
     if (!ngx_js_http_proxy(http) && u.addrs == NULL) {
         resolve_host = &u.host;
+    }
+
+    if (ngx_js_check_request_line_component(u.uri.data, u.uri.len) != NGX_OK) {
+        JS_ThrowInternalError(cx, "invalid url");
+        goto fail;
     }
 
     ngx_js_fetch_build_request(http, &request, &u.uri, &u,
@@ -932,6 +943,15 @@ ngx_qjs_method_process(JSContext *cx, ngx_js_request_t *request)
         ngx_null_string,
     };
 
+    if (request->method.len == 0
+        || ngx_js_check_request_line_component(request->method.data,
+                                               request->method.len)
+           != NGX_OK)
+    {
+        JS_ThrowInternalError(cx, "invalid Request method");
+        return NGX_ERROR;
+    }
+
     for (m = &forbidden[0]; m->len != 0; m++) {
         if (request->method.len == m->len
             && ngx_strncasecmp(request->method.data, m->data, m->len) == 0)
@@ -1143,7 +1163,8 @@ ngx_qjs_fetch_alloc(JSContext *cx, ngx_pool_t *pool, ngx_log_t *log,
     http->conf = conf;
 
     http->content_length_n = -1;
-    http->keepalive = (conf->fetch_keepalive > 0);
+    http->keepalive = (conf->fetch_keepalive > 0
+                       && !ngx_js_conf_dynamic_proxy(conf));
 
     ngx_qjs_arg(http->response.header_value) = JS_UNDEFINED;
 
@@ -1316,13 +1337,12 @@ static ngx_int_t
 ngx_qjs_headers_append(JSContext *cx, ngx_js_headers_t *headers,
     u_char *name, size_t len, u_char *value, size_t vlen)
 {
-    u_char           *p, *end;
     ngx_int_t         ret;
     ngx_uint_t        i;
     ngx_list_part_t  *part;
     ngx_js_tb_elt_t  *h, **ph;
 
-    ngx_js_http_trim(&value, &vlen, 0);
+    ngx_js_http_trim_ows(&value, &vlen);
 
     ret = ngx_js_check_header_name(name, len);
     if (ret != NGX_OK) {
@@ -1330,16 +1350,10 @@ ngx_qjs_headers_append(JSContext *cx, ngx_js_headers_t *headers,
         return NGX_ERROR;
     }
 
-    p = value;
-    end = p + vlen;
-
-    while (p < end) {
-        if (*p == '\0') {
-            JS_ThrowInternalError(cx, "invalid header value");
-            return NGX_ERROR;
-        }
-
-        p++;
+    ret = ngx_js_check_header_value(value, vlen);
+    if (ret != NGX_OK) {
+        JS_ThrowInternalError(cx, "invalid header value");
+        return NGX_ERROR;
     }
 
     if (headers->guard == GUARD_IMMUTABLE) {

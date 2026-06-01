@@ -73,6 +73,10 @@ http {
             return 200 $http_a;
         }
 
+        location /target {
+            return 200 $request_uri;
+        }
+
         location /body {
             js_content test.body;
         }
@@ -156,8 +160,42 @@ $t->write_file('test.js', <<EOF);
 
              }, 'OK'],
             ['invalid header value', () => {
-                var h = new Headers({A: 'aa\x00a'});
-             }, 'invalid header value'],
+                const invalid = [0, 1, 8, 10, 13, 31, 127];
+
+                for (var i = 0; i < invalid.length; i++) {
+                    var c = String.fromCharCode(invalid[i]);
+                    var values = [
+                        c, c + 'aa', 'aa' + c, 'aa' + c + 'a'
+                    ];
+
+                    for (var j = 0; j < values.length; j++) {
+                        try {
+                            new Headers({A: values[j]});
+                            throw new Error('no error');
+
+                        } catch (e) {
+                            if (e.message != 'invalid header value') {
+                                throw e;
+                            }
+                        }
+                    }
+                }
+
+                return 'OK';
+
+             }, 'OK'],
+            ['valid header value', () => {
+                var obs = String.fromCharCode(0x80, 0xff);
+                var h = new Headers({A: '\t a\tb \t'});
+
+                h.append('A', obs);
+
+                if (h.get('a') != 'a\tb, ' + obs) {
+                    throw new Error('invalid header value normalization');
+                }
+
+                return 'OK';
+             }, 'OK'],
             ['combine', () => {
                 var h = new Headers({a: 'X', A: 'Z'});
                 return h.get('a');
@@ -315,20 +353,53 @@ $t->write_file('test.js', <<EOF);
              }, 'OK'],
             ['method', () => {
                 const methods = ['get', 'hEad', 'Post', 'OPTIONS', 'PUT',
-                                 'DELETE', 'CONNECT'];
-                try {
-                    methods.forEach(m => {
-                        var r = new Request("http://nginx.org", {method: m});
-                        if (r.method != m.toUpperCase()) {
-                            throw new Error(`r.method != \${m}`);
-                        }
-                    })
+                                 'DELETE'];
+                const forbidden = ['CONNECT', 'TRACE', 'TRACK'];
+                const invalid = ['', 'GET ', ' GET', 'GE T', 'GE\\tT',
+                                 'GE\\nT', 'GE\\rT', 'GE\\x00T',
+                                 'GET\\r\\nX: y',
+                                 'GE' + String.fromCharCode(0x7f) + 'T'];
+                const high = 'G' + String.fromCharCode(0xc9) + 'T';
+                const extensions = ['PROPFIND', 'propfind', 'M-SEARCH',
+                                    high, 'FOO/BAR'];
 
-                } catch (e) {
-                    if (!e.message.startsWith('forbidden method: CONNECT')) {
-                        throw e;
+                methods.forEach(m => {
+                    var r = new Request("http://nginx.org", {method: m});
+                    if (r.method != m.toUpperCase()) {
+                        throw new Error(`r.method != \${m}`);
                     }
-                }
+                });
+
+                forbidden.forEach(m => {
+                    try {
+                        new Request("http://nginx.org", {method: m});
+                        throw new Error('no error');
+
+                    } catch (e) {
+                        if (!e.message.startsWith(`forbidden method: \${m}`)) {
+                            throw e;
+                        }
+                    }
+                });
+
+                invalid.forEach(m => {
+                    try {
+                        new Request("http://nginx.org", {method: m});
+                        throw new Error('no error');
+
+                    } catch (e) {
+                        if (e.message != 'invalid Request method') {
+                            throw e;
+                        }
+                    }
+                });
+
+                extensions.forEach(m => {
+                    var r = new Request("http://nginx.org", {method: m});
+                    if (r.method != m) {
+                        throw new Error(`r.method != \${m}`);
+                    }
+                });
 
                 return 'OK';
 
@@ -499,6 +570,30 @@ $t->write_file('test.js', <<EOF);
                 var body = await r.text();
                 return `\${r.url}: \${r.status} \${body}`;
              }, 'http://127.0.0.1:$p0/body: 201 foo'],
+            ['unsafe request target', async () => {
+                const unsafe = [0, 9, 10, 13, 32, 127];
+
+                for (var i = 0; i < unsafe.length; i++) {
+                    try {
+                        await ngx.fetch('http://127.0.0.1:$p0/a'
+                                        + String.fromCharCode(unsafe[i]) + 'b');
+                        throw new Error('no error');
+
+                    } catch (e) {
+                        if (e.message != 'invalid url') {
+                            throw e;
+                        }
+                    }
+                }
+
+                return 'OK';
+             }, 'OK'],
+            ['encoded request target', async () => {
+                var r = await ngx.fetch('http://127.0.0.1:$p0/'
+                                        + 'target%0D%0A?q=%00%20');
+                var body = await r.text();
+                return `\${r.status} \${body}`;
+             }, '200 /target%0D%0A?q=%00%20'],
         ];
 
         run(r, tests);

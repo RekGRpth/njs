@@ -584,6 +584,12 @@ ngx_js_ext_fetch(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
 #endif
     }
 
+#if (NGX_SSL)
+    if (http->ssl != NULL && !http->ssl_verify) {
+        http->keepalive = 0;
+    }
+#endif
+
     if (request.method.len == 4
         && ngx_strncasecmp(request.method.data, (u_char *) "HEAD", 4) == 0)
     {
@@ -619,6 +625,11 @@ ngx_js_ext_fetch(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
 
     if (!ngx_js_http_proxy(http) && u.addrs == NULL) {
         resolve_host = &u.host;
+    }
+
+    if (ngx_js_check_request_line_component(u.uri.data, u.uri.len) != NGX_OK) {
+        njs_vm_error(vm, "invalid url");
+        goto fail;
     }
 
     ngx_js_fetch_build_request(http, &request, &u.uri, &u,
@@ -892,6 +903,15 @@ ngx_js_method_process(njs_vm_t *vm, ngx_js_request_t *request)
     str.start = request->method.data;
     str.length = request->method.len;
 
+    if (request->method.len == 0
+        || ngx_js_check_request_line_component(request->method.data,
+                                               request->method.len)
+           != NGX_OK)
+    {
+        njs_vm_error(vm, "invalid Request method");
+        return NJS_ERROR;
+    }
+
     for (m = &forbidden[0]; m->length != 0; m++) {
         if (njs_strstr_case_eq(&str, m)) {
             njs_vm_error(vm, "forbidden method: %V", m);
@@ -1081,7 +1101,8 @@ ngx_js_fetch_alloc(njs_vm_t *vm, ngx_pool_t *pool, ngx_log_t *log,
     http->conf = conf;
 
     http->content_length_n = -1;
-    http->keepalive = (conf->fetch_keepalive > 0);
+    http->keepalive = (conf->fetch_keepalive > 0
+                       && !ngx_js_conf_dynamic_proxy(conf));
 
     http->append_headers = ngx_js_fetch_append_headers;
     http->ready_handler = ngx_js_fetch_process_done;
@@ -1513,13 +1534,12 @@ static njs_int_t
 ngx_js_headers_append(njs_vm_t *vm, ngx_js_headers_t *headers,
     u_char *name, size_t len, u_char *value, size_t vlen)
 {
-    u_char           *p, *end;
     ngx_int_t         ret;
     ngx_uint_t        i;
     ngx_js_tb_elt_t  *h, **ph;
     ngx_list_part_t  *part;
 
-    ngx_js_http_trim(&value, &vlen, 0);
+    ngx_js_http_trim_ows(&value, &vlen);
 
     ret = ngx_js_check_header_name(name, len);
     if (ret != NGX_OK) {
@@ -1527,16 +1547,10 @@ ngx_js_headers_append(njs_vm_t *vm, ngx_js_headers_t *headers,
         return NJS_ERROR;
     }
 
-    p = value;
-    end = p + vlen;
-
-    while (p < end) {
-        if (*p == '\0') {
-            njs_vm_error(vm, "invalid header value");
-            return NJS_ERROR;
-        }
-
-        p++;
+    ret = ngx_js_check_header_value(value, vlen);
+    if (ret != NGX_OK) {
+        njs_vm_error(vm, "invalid header value");
+        return NJS_ERROR;
     }
 
     if (headers->guard == GUARD_IMMUTABLE) {

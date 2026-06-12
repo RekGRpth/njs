@@ -287,8 +287,10 @@ ngx_qjs_ext_fetch(JSContext *cx, JSValueConst this_val, int argc,
         }
 
         if (!JS_IsUndefined(value)) {
-            if (JS_ToInt64(cx, (int64_t *) &http->buffer_size, value) < 0) {
-                JS_FreeValue(cx, value);
+            rc = JS_ToInt64(cx, (int64_t *) &http->buffer_size, value);
+            JS_FreeValue(cx, value);
+
+            if (rc < 0) {
                 goto fail;
             }
         }
@@ -299,10 +301,11 @@ ngx_qjs_ext_fetch(JSContext *cx, JSValueConst this_val, int argc,
         }
 
         if (!JS_IsUndefined(value)) {
-            if (JS_ToInt64(cx, (int64_t *) &http->max_response_body_size,
-                           value) < 0)
-            {
-                JS_FreeValue(cx, value);
+            rc = JS_ToInt64(cx, (int64_t *) &http->max_response_body_size,
+                            value);
+            JS_FreeValue(cx, value);
+
+            if (rc < 0) {
                 goto fail;
             }
         }
@@ -315,6 +318,7 @@ ngx_qjs_ext_fetch(JSContext *cx, JSValueConst this_val, int argc,
 
         if (!JS_IsUndefined(value)) {
             http->ssl_verify = JS_ToBool(cx, value);
+            JS_FreeValue(cx, value);
         }
 #endif
     }
@@ -346,7 +350,7 @@ ngx_qjs_ext_fetch(JSContext *cx, JSValueConst this_val, int argc,
                 != NGX_OK)
             {
                 JS_ThrowInternalError(cx, "failed to evaluate proxy URL");
-                return JS_EXCEPTION;
+                goto fail;
             }
 
         } else {
@@ -381,8 +385,8 @@ ngx_qjs_ext_fetch(JSContext *cx, JSValueConst this_val, int argc,
                                ngx_qjs_external_resolver_timeout(cx, external));
 
         if (rs == NULL) {
-            JS_FreeValue(cx, promise);
-            return JS_ThrowOutOfMemory(cx);
+            JS_ThrowOutOfMemory(cx);
+            goto fail;
         }
 
         if (rs == NGX_NO_RESOLVER) {

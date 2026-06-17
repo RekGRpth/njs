@@ -918,7 +918,20 @@ njs_buffer_concat(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
                 return ret;
             }
 
+            /* The getter above may have changed the element type. */
+
+            if (njs_slow_path(!njs_is_typed_array(&val))) {
+                njs_type_error(vm, "\"list[%L]\" argument must be an "
+                                   "instance of Buffer or Uint8Array", i);
+                return NJS_ERROR;
+            }
+
             arr = njs_typed_array(&val);
+            if (njs_slow_path(njs_is_detached_buffer(arr->buffer))) {
+                njs_type_error(vm, "detached buffer");
+                return NJS_ERROR;
+            }
+
             n = njs_min((size_t) len, arr->byte_length);
             src = &njs_typed_array_buffer(arr)->u.u8[arr->offset];
 
@@ -1010,8 +1023,8 @@ njs_buffer_prototype_read_int(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
         }
 
         size = (size_t) njs_number(value);
-        if (njs_slow_path(size > 6)) {
-            njs_type_error(vm, "\"byteLength\" must be <= 6");
+        if (njs_slow_path(size == 0 || size > 6)) {
+            njs_type_error(vm, "\"byteLength\" must be >= 1 and <= 6");
             return NJS_ERROR;
         }
     }
@@ -1296,8 +1309,8 @@ njs_buffer_prototype_write_int(njs_vm_t *vm, njs_value_t *args,
         }
 
         size = (size_t) njs_number(value);
-        if (njs_slow_path(size > 6)) {
-            njs_type_error(vm, "\"byteLength\" must be <= 6");
+        if (njs_slow_path(size == 0 || size > 6)) {
+            njs_type_error(vm, "\"byteLength\" must be >= 1 and <= 6");
             return NJS_ERROR;
         }
     }
@@ -1905,6 +1918,11 @@ njs_buffer_fill_typed_array(njs_vm_t *vm, const njs_value_t *value,
 
     byte_length = arr_from->byte_length;
     from = &njs_typed_array_buffer(arr_from)->u.u8[arr_from->offset];
+
+    if (byte_length == 0) {
+        memset(to, 0, end - to);
+        return NJS_OK;
+    }
 
     if (njs_typed_array_buffer(arr_from)->u.u8 == buffer->u.u8) {
         while (to < end) {

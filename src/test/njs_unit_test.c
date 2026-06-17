@@ -5315,6 +5315,13 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("Array.prototype.slice.call({ length: Object.create(null) })"),
       njs_str("TypeError: Cannot convert object to primitive value") },
 
+    /* Large sparse slice goes through the non-fast keys path. */
+
+    { njs_str("var a = []; a[10] = 'a'; a[40000] = 'b'; a.length = 50000;"
+              "var s = a.slice(5, 45000);"
+              "[s.length, s[5], s[39995], (10 in s), (40000 in s)].join(',')"),
+      njs_str("44995,a,b,false,false") },
+
     { njs_str("Array.prototype.slice.call({length:-1})"),
       njs_str("") },
 
@@ -7317,6 +7324,28 @@ static njs_unit_test_t  njs_test[] =
     { njs_str(NJS_TYPED_ARRAY_LIST
               ".every(v=>{var a = new v([3,2,1]);"
               "           return [a.toReversed(), a].toString() === '1,2,3,3,2,1'})"),
+      njs_str("true") },
+
+    /* Same-type copies must honor the source view offset. */
+
+    { njs_str(NJS_TYPED_ARRAY_LIST
+              ".every(v=>{var a = (new v([0,1,2,3,4])).subarray(2);"
+              "           return (new v(a)).toString() === '2,3,4'})"),
+      njs_str("true") },
+
+    { njs_str(NJS_TYPED_ARRAY_LIST
+              ".every(v=>{var a = (new v([0,1,2,3,4])).subarray(2);"
+              "           return a.slice(1, 3).toString() === '3,4'})"),
+      njs_str("true") },
+
+    { njs_str(NJS_TYPED_ARRAY_LIST
+              ".every(v=>{var a = (new v([0,1,2,3,4])).subarray(2);"
+              "           return a.toReversed().toString() === '4,3,2'})"),
+      njs_str("true") },
+
+    { njs_str(NJS_TYPED_ARRAY_LIST
+              ".every(v=>{var a = (new v([0,3,2,1,4])).subarray(2);"
+              "           return a.toSorted().toString() === '1,2,4'})"),
       njs_str("true") },
 
     { njs_str("Uint8Array.prototype.sort.call(1)"),

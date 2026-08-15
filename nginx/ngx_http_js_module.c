@@ -10,6 +10,7 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 #include "ngx_js.h"
+#include "ngx_js_http.h"
 #include "ngx_js_modules.h"
 #include "ngx_js_form.h"
 
@@ -493,6 +494,8 @@ static int ngx_http_qjs_headers_out_delete_property(JSContext *cx,
 static ngx_http_request_t *ngx_http_qjs_request(JSValueConst val);
 static JSValue ngx_http_qjs_request_make(JSContext *cx, ngx_int_t proto_id,
     ngx_http_request_t *r);
+static void ngx_http_qjs_request_mark(JSRuntime *rt, JSValueConst val,
+    JS_MarkFunc *mark_func);
 static void ngx_http_qjs_request_finalizer(JSRuntime *rt, JSValue val);
 static void ngx_http_qjs_periodic_finalizer(JSRuntime *rt, JSValue val);
 #endif
@@ -535,6 +538,7 @@ static void *ngx_http_js_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_js_merge_loc_conf(ngx_conf_t *cf, void *parent,
     void *child);
 
+static ngx_int_t ngx_http_js_status_is_redirect(ngx_int_t status);
 static ngx_int_t ngx_http_js_parse_unsafe_uri(ngx_http_request_t *r,
     njs_str_t *uri, njs_str_t *args);
 
@@ -1467,6 +1471,7 @@ static const JSCFunctionListEntry ngx_http_qjs_ext_request_form[] = {
 static JSClassDef ngx_http_qjs_request_class = {
     "Request",
     .finalizer = ngx_http_qjs_request_finalizer,
+    .gc_mark = ngx_http_qjs_request_mark,
 };
 
 
@@ -2127,6 +2132,7 @@ ngx_http_js_variable_var(ngx_http_request_t *r, ngx_http_variable_value_t *v,
 static ngx_int_t
 ngx_http_js_init_vm(ngx_http_request_t *r, njs_int_t proto_id)
 {
+    ngx_engine_t            *engine;
     ngx_http_js_ctx_t       *ctx;
     ngx_pool_cleanup_t      *cln;
     ngx_http_js_loc_conf_t  *jlcf;
@@ -2153,20 +2159,23 @@ ngx_http_js_init_vm(ngx_http_request_t *r, njs_int_t proto_id)
         return NGX_OK;
     }
 
-    ctx->engine = jlcf->engine->clone((ngx_js_ctx_t *) ctx,
-                                      (ngx_js_loc_conf_t *) jlcf, proto_id, r);
-    if (ctx->engine == NULL) {
+    engine = jlcf->engine->clone((ngx_js_ctx_t *) ctx,
+                                 (ngx_js_loc_conf_t *) jlcf, proto_id, r);
+    if (engine == NULL) {
         return NGX_ERROR;
     }
+
+    cln = ngx_pool_cleanup_add(r->pool, 0);
+    if (cln == NULL) {
+        ngx_js_clone_abort((ngx_js_ctx_t *) ctx, engine);
+        return NGX_ERROR;
+    }
+
+    ctx->engine = engine;
 
     ngx_log_debug3(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
                    "http js vm clone %s: %p from: %p", jlcf->engine->name,
                    ctx->engine, jlcf->engine);
-
-    cln = ngx_pool_cleanup_add(r->pool, 0);
-    if (cln == NULL) {
-        return NGX_ERROR;
-    }
 
     cln->handler = ngx_http_js_cleanup_ctx;
     cln->data = ctx;
@@ -2178,10 +2187,8 @@ ngx_http_js_init_vm(ngx_http_request_t *r, njs_int_t proto_id)
 static void
 ngx_http_js_cleanup_ctx(void *data)
 {
-    ngx_http_request_t      *r;
-    ngx_http_js_loc_conf_t  *jlcf;
-
-    ngx_http_js_ctx_t        *ctx = data;
+    ngx_http_request_t  *r;
+    ngx_http_js_ctx_t   *ctx = data;
 
     if (ngx_js_ctx_pending(ctx)) {
         ngx_log_error(NGX_LOG_ERR, ctx->log, 0, "pending events");
@@ -2193,13 +2200,11 @@ ngx_http_js_cleanup_ctx(void *data)
     r = ngx_js_ctx_external(ctx);
 
     /*
-     * Restoring the original module context, because it can be reset
-     * by internalRedirect() method. Proper ctx is required for
-     * ngx_http_qjs_request_finalizer() to work correctly.
+     * Restoring the original module context, because it can be reset by
+     * internalRedirect().  Exit hooks and event destructors must resolve the
+     * context being destroyed.
      */
     ngx_http_set_ctx(r, ctx, ngx_http_js_module);
-
-    jlcf = ngx_http_get_module_loc_conf(r, ngx_http_js_module);
 
     /*
      * r->pool set to NULL by ngx_http_free_request().
@@ -2208,7 +2213,7 @@ ngx_http_js_cleanup_ctx(void *data)
      */
     r->pool = ngx_create_pool(128, ctx->log);
 
-    ngx_js_ctx_destroy((ngx_js_ctx_t *) ctx, (ngx_js_loc_conf_t *) jlcf);
+    ngx_js_ctx_destroy((ngx_js_ctx_t *) ctx);
 
     ngx_destroy_pool(r->pool);
 }
@@ -2463,6 +2468,14 @@ ngx_http_js_ext_header_out(njs_vm_t *vm, njs_object_prop_t *prop,
         return NJS_DECLINED;
     }
 
+    if (setval != NULL
+        && ngx_js_check_header_name(name.start, name.length) != NGX_OK)
+    {
+        njs_vm_type_error(vm, "%s",
+                          ngx_js_headers_error(NGX_JS_HEADERS_INVALID_NAME));
+        return NJS_ERROR;
+    }
+
     if (r->header_sent && setval != NULL) {
         ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
                       "ignored setting of response header \"%V\" because"
@@ -2544,7 +2557,7 @@ ngx_http_js_header_out_special(njs_vm_t *vm, ngx_http_request_t *r,
         setval = njs_vm_array_prop(vm, setval, length - 1, &lvalue);
     }
 
-    if (ngx_js_string(vm, setval, &s) != NGX_OK) {
+    if (ngx_js_header_value(vm, setval, &s) != NGX_OK) {
         return NJS_ERROR;
     }
 
@@ -2790,7 +2803,7 @@ ngx_http_js_header_generic(njs_vm_t *vm, ngx_http_request_t *r,
             setval = njs_vm_array_prop(vm, array, i, &lvalue);
         }
 
-        if (ngx_js_string(vm, setval, &s) != NGX_OK) {
+        if (ngx_js_header_value(vm, setval, &s) != NGX_OK) {
             return NJS_ERROR;
         }
 
@@ -3267,7 +3280,15 @@ ngx_http_js_ext_return(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     if (status < NGX_HTTP_BAD_REQUEST
         || !njs_value_is_null_or_undefined(njs_arg(args, nargs, 2)))
     {
-        if (ngx_js_string(vm, njs_arg(args, nargs, 2), &text) != NGX_OK) {
+        if (ngx_http_js_status_is_redirect(status)) {
+            if (ngx_js_header_value(vm, njs_arg(args, nargs, 2), &text)
+                != NGX_OK)
+            {
+                return NJS_ERROR;
+            }
+
+        } else if (ngx_js_string(vm, njs_arg(args, nargs, 2), &text) != NGX_OK)
+        {
             njs_vm_memory_error(vm);
             return NJS_ERROR;
         }
@@ -5239,7 +5260,7 @@ ngx_http_js_header_out(njs_vm_t *vm, ngx_http_request_t *r, unsigned flags,
             setval = njs_vm_array_prop(vm, array, i, &lvalue);
         }
 
-        if (ngx_js_string(vm, setval, &s) != NGX_OK) {
+        if (ngx_js_header_value(vm, setval, &s) != NGX_OK) {
             return NJS_ERROR;
         }
 
@@ -5319,7 +5340,7 @@ ngx_http_js_header_out_special(njs_vm_t *vm, ngx_http_request_t *r,
         setval = njs_vm_array_prop(vm, setval, length - 1, &lvalue);
     }
 
-    if (ngx_js_string(vm, setval, &s) != NGX_OK) {
+    if (ngx_js_header_value(vm, setval, &s) != NGX_OK) {
         return NJS_ERROR;
     }
 
@@ -5594,7 +5615,7 @@ ngx_http_js_content_type(njs_vm_t *vm, ngx_http_request_t *r,
         setval = njs_vm_array_prop(vm, setval, length - 1, &lvalue);
     }
 
-    if (ngx_js_string(vm, setval, &s) != NGX_OK) {
+    if (ngx_js_header_value(vm, setval, &s) != NGX_OK) {
         return NJS_ERROR;
     }
 
@@ -6021,6 +6042,7 @@ ngx_engine_njs_clone(ngx_js_ctx_t *ctx, ngx_js_loc_conf_t *cf,
                                 proto_id, njs_vm_external_ptr(engine->u.njs.vm),
                                 0);
     if (rc != NJS_OK) {
+        ngx_js_clone_abort(ctx, engine);
         return NULL;
     }
 
@@ -7192,7 +7214,12 @@ ngx_http_qjs_ext_return(JSContext *cx, JSValueConst this_val,
     ctx = ngx_http_get_module_ctx(r, ngx_http_js_module);
 
     if (status < NGX_HTTP_BAD_REQUEST || !JS_IsNullOrUndefined(argv[1])) {
-        if (ngx_qjs_string(cx, r->pool, argv[1], &body) != NGX_OK) {
+        if (ngx_http_js_status_is_redirect(status)) {
+            if (ngx_qjs_header_value(cx, r->pool, argv[1], &body) != NGX_OK) {
+                return JS_EXCEPTION;
+            }
+
+        } else if (ngx_qjs_string(cx, r->pool, argv[1], &body) != NGX_OK) {
             return JS_ThrowOutOfMemory(cx);
         }
 
@@ -8674,7 +8701,7 @@ ngx_http_qjs_headers_out_handler(JSContext *cx, ngx_http_request_t *r,
             }
         }
 
-        rc = ngx_qjs_string(cx, r->pool, v, &s);
+        rc = ngx_qjs_header_value(cx, r->pool, v, &s);
 
         if (qjs_is_array(cx, *value)) {
             JS_FreeValue(cx, v);
@@ -8766,7 +8793,7 @@ ngx_http_qjs_headers_out_special_handler(JSContext *cx, ngx_http_request_t *r,
         setval = JS_UNDEFINED;
     }
 
-    rc = ngx_qjs_string(cx, r->pool, setval, &s);
+    rc = ngx_qjs_header_value(cx, r->pool, setval, &s);
 
     if (value != NULL && qjs_is_array(cx, *value)) {
         JS_FreeValue(cx, setval);
@@ -8992,7 +9019,7 @@ ngx_http_qjs_headers_out_content_type(JSContext *cx, ngx_http_request_t *r,
         setval = *value;
     }
 
-    rc = ngx_qjs_string(cx, r->pool, setval, &s);
+    rc = ngx_qjs_header_value(cx, r->pool, setval, &s);
 
     if (qjs_is_array(cx, *value)) {
         JS_FreeValue(cx, setval);
@@ -9204,6 +9231,13 @@ ngx_http_qjs_headers_out_define_own_property(JSContext *cx,
 
     name.len = ngx_strlen(name.data);
 
+    if (ngx_js_check_header_name(name.data, name.len) != NGX_OK) {
+        JS_FreeCString(cx, (char *) name.data);
+        (void) JS_ThrowTypeError(cx, "%s",
+                            ngx_js_headers_error(NGX_JS_HEADERS_INVALID_NAME));
+        return -1;
+    }
+
     if (r->header_sent) {
         ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
                       "ignored setting of response header \"%V\" because"
@@ -9374,6 +9408,7 @@ ngx_http_qjs_request_make(JSContext *cx, ngx_int_t proto_id,
 
     req = js_malloc(cx, sizeof(ngx_http_qjs_request_t));
     if (req == NULL) {
+        JS_FreeValue(cx, request);
         return JS_ThrowOutOfMemory(cx);
     }
 
@@ -9385,6 +9420,21 @@ ngx_http_qjs_request_make(JSContext *cx, ngx_int_t proto_id,
     JS_SetOpaque(request, req);
 
     return request;
+}
+
+
+static void
+ngx_http_qjs_request_mark(JSRuntime *rt, JSValueConst val,
+    JS_MarkFunc *mark_func)
+{
+    ngx_http_qjs_request_t  *req;
+
+    req = JS_GetOpaque(val, NGX_QJS_CLASS_ID_HTTP_REQUEST);
+    if (req != NULL) {
+        JS_MarkValue(rt, req->args, mark_func);
+        JS_MarkValue(rt, req->request_body, mark_func);
+        JS_MarkValue(rt, req->response_body, mark_func);
+    }
 }
 
 
@@ -9442,12 +9492,12 @@ ngx_engine_qjs_clone(ngx_js_ctx_t *ctx, ngx_js_loc_conf_t *cf,
         if (JS_NewClass(JS_GetRuntime(cx), NGX_QJS_CLASS_ID_HTTP_REQUEST,
                         &ngx_http_qjs_request_class) < 0)
         {
-            return NULL;
+            goto failed;
         }
 
         proto = JS_NewObject(cx);
         if (JS_IsException(proto)) {
-            return NULL;
+            goto failed;
         }
 
         JS_SetPropertyFunctionList(cx, proto, ngx_http_qjs_ext_request,
@@ -9458,12 +9508,12 @@ ngx_engine_qjs_clone(ngx_js_ctx_t *ctx, ngx_js_loc_conf_t *cf,
         if (JS_NewClass(JS_GetRuntime(cx), NGX_QJS_CLASS_ID_HTTP_FORM,
                         &ngx_http_qjs_request_form_class) < 0)
         {
-            return NULL;
+            goto failed;
         }
 
         proto = JS_NewObject(cx);
         if (JS_IsException(proto)) {
-            return NULL;
+            goto failed;
         }
 
         JS_SetPropertyFunctionList(cx, proto, ngx_http_qjs_ext_request_form,
@@ -9474,12 +9524,12 @@ ngx_engine_qjs_clone(ngx_js_ctx_t *ctx, ngx_js_loc_conf_t *cf,
         if (JS_NewClass(JS_GetRuntime(cx), NGX_QJS_CLASS_ID_HTTP_PERIODIC,
                         &ngx_http_qjs_periodic_class) < 0)
         {
-            return NULL;
+            goto failed;
         }
 
         proto = JS_NewObject(cx);
         if (JS_IsException(proto)) {
-            return NULL;
+            goto failed;
         }
 
         JS_SetPropertyFunctionList(cx, proto, ngx_http_qjs_ext_periodic,
@@ -9490,24 +9540,21 @@ ngx_engine_qjs_clone(ngx_js_ctx_t *ctx, ngx_js_loc_conf_t *cf,
         if (JS_NewClass(JS_GetRuntime(cx), NGX_QJS_CLASS_ID_HTTP_VARS,
                         &ngx_http_qjs_variables_class) < 0)
         {
-            return NULL;
+            goto failed;
         }
 
         if (JS_NewClass(JS_GetRuntime(cx), NGX_QJS_CLASS_ID_HTTP_HEADERS_IN,
                         &ngx_http_qjs_headers_in_class) < 0)
         {
-            return NULL;
+            goto failed;
         }
 
         if (JS_NewClass(JS_GetRuntime(cx), NGX_QJS_CLASS_ID_HTTP_HEADERS_OUT,
                         &ngx_http_qjs_headers_out_class) < 0)
         {
-            return NULL;
+            goto failed;
         }
     }
-
-    hctx = (ngx_http_js_ctx_t *) ctx;
-    hctx->body_filter = ngx_http_qjs_body_filter;
 
     if (proto_id == ngx_http_js_request_proto_id) {
         proto_id = NGX_QJS_CLASS_ID_HTTP_REQUEST;
@@ -9516,13 +9563,22 @@ ngx_engine_qjs_clone(ngx_js_ctx_t *ctx, ngx_js_loc_conf_t *cf,
         proto_id = NGX_QJS_CLASS_ID_HTTP_PERIODIC;
     }
 
-    ngx_qjs_arg(hctx->args[0]) = ngx_http_qjs_request_make(cx, proto_id,
-                                                           external);
-    if (JS_IsException(ngx_qjs_arg(hctx->args[0]))) {
-        return NULL;
+    ngx_qjs_arg(ctx->args[0]) = ngx_http_qjs_request_make(cx, proto_id,
+                                                          external);
+    if (JS_IsException(ngx_qjs_arg(ctx->args[0]))) {
+        goto failed;
     }
 
+    hctx = (ngx_http_js_ctx_t *) ctx;
+    hctx->body_filter = ngx_http_qjs_body_filter;
+
     return engine;
+
+failed:
+
+    ngx_js_clone_abort(ctx, engine);
+
+    return NULL;
 }
 
 #endif
@@ -10147,6 +10203,22 @@ ngx_http_js_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     }
 
     return NGX_CONF_OK;
+}
+
+
+/*
+ * ngx_http_send_response() turns the text into the Location header
+ * for these statuses, so the text is a header value there.
+ */
+
+static ngx_int_t
+ngx_http_js_status_is_redirect(ngx_int_t status)
+{
+    return status == NGX_HTTP_MOVED_PERMANENTLY
+           || status == NGX_HTTP_MOVED_TEMPORARILY
+           || status == NGX_HTTP_SEE_OTHER
+           || status == NGX_HTTP_TEMPORARY_REDIRECT
+           || status == NGX_HTTP_PERMANENT_REDIRECT;
 }
 
 

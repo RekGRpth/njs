@@ -22,8 +22,15 @@
 #include <quickjs_compat.h>
 
 
+/*
+ * The engine reserves class ids below JS_CLASS_INIT_COUNT for its own
+ * classes.  The value is internal and grows between releases, so the ids
+ * below start far enough above it.
+ */
+#define QJS_CORE_CLASS_ID_OFFSET   128
+
 enum {
-    QJS_CORE_CLASS_ID_BUFFER = 64,
+    QJS_CORE_CLASS_ID_BUFFER = QJS_CORE_CLASS_ID_OFFSET,
     QJS_CORE_CLASS_ID_UINT8_ARRAY_CTOR,
     QJS_CORE_CLASS_ID_TEXT_DECODER,
     QJS_CORE_CLASS_ID_TEXT_ENCODER,
@@ -55,6 +62,8 @@ JSValue qjs_call_exit_hook(JSContext *ctx);
 
 JSValue qjs_new_uint8_array(JSContext *ctx, int argc, JSValueConst *argv);
 JSValue qjs_new_array_buffer(JSContext *cx, uint8_t *src, size_t len);
+JSValue qjs_new_external_array_buffer(JSContext *cx, uint8_t *src, size_t len,
+    int is_shared);
 JSValue qjs_buffer_alloc(JSContext *ctx, size_t size);
 JSValue qjs_buffer_create(JSContext *ctx, u_char *start, size_t size);
 JSValue qjs_buffer_chb_alloc(JSContext *ctx, njs_chb_t *chain);
@@ -141,30 +150,26 @@ static inline JS_BOOL JS_IsNullOrUndefined(JSValueConst v)
 }
 
 /*
- * QuickJS-NG attaches the "stack" property to an Error object too early,
- * which results in empty stack trace when called from C code.
- * Removing it allows the stack to be attached later during unwinding.
+ * JS_NewError() records the stack of the caller, which is empty for an
+ * error created outside of a JS frame.  Since QuickJS-NG 0.16.0 the
+ * recorded stack is also final, the engine never replaces it.  Creating
+ * the object without letting the engine record anything allows the stack
+ * to be attached where the error is actually thrown.
  */
-static inline JSValue qjs_new_error2(JSContext *cx)
+static inline JSValue qjs_new_error(JSContext *cx)
 {
-    JSAtom   stack;
-    JSValue  error;
-
-    stack = JS_NewAtom(cx, "stack");
-    if (stack == JS_ATOM_NULL) {
-        return JS_EXCEPTION;
-    }
+    JSValue    error;
+    JSClassID  class_id;
 
     error = JS_NewError(cx);
     if (JS_IsException(error)) {
-        JS_FreeAtom(cx, stack);
         return JS_EXCEPTION;
     }
 
-    JS_DeleteProperty(cx, error, stack, 0);
-    JS_FreeAtom(cx, stack);
+    class_id = JS_GetClassID(error);
+    JS_FreeValue(cx, error);
 
-    return error;
+    return JS_NewObjectClass(cx, class_id);
 }
 
 #ifdef NJS_HAVE_QUICKJS_IS_SAME_VALUE
@@ -183,12 +188,6 @@ static inline JSValue qjs_new_error2(JSContext *cx)
 #define qjs_is_error(cx, a) JS_IsError(a)
 #else
 #define qjs_is_error(cx, a) JS_IsError(cx, a)
-#endif
-
-#ifdef NJS_HAVE_QUICKJS_NEW_ERROR_STACK
-#define qjs_new_error(cx) qjs_new_error2(cx)
-#else
-#define qjs_new_error(cx) JS_NewError(cx)
 #endif
 
 extern qjs_module_t              *qjs_modules[];

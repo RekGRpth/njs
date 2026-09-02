@@ -1,3 +1,61 @@
+Changes with njs 1.0.1                                       02 Sep 2026
+
+    nginx modules:
+
+    *) Security: fixed an access control bypass in js_access when an
+       asynchronous request body continuation threw an exception or
+       produced an unhandled rejection.  Previously, nginx could continue
+       processing the request as though the js_access check had succeeded.
+       Thanks to Ta Duc Thien.
+
+    *) Security: fixed a worker process crash when reading
+       Response.statusText after an upstream server returned a status
+       line with an empty reason phrase.
+
+    *) Bugfix: fixed unhandled promise rejection tracking in reused
+       QuickJS contexts.
+
+    *) Bugfix: fixed SharedDict.pop() returning undefined for unexpired
+       entries in shared dictionaries with a timeout.
+
+    *) Bugfix: fixed validation and replacement of Fetch Headers values.
+       This also fixed dangling header names in the QuickJS engine.
+
+    *) Bugfix: fixed missing validation of r.headersOut names and values,
+       and of redirect targets passed to r.return().
+
+    *) Bugfix: fixed use-after-free, worker aborts, and leaks caused by
+       cyclic references involving Fetch, HTTP request, and Stream session
+       objects in the QuickJS engine.
+
+    *) Bugfix: fixed QuickJS context reuse after internal redirects and
+       when pending jobs remained after request teardown.
+
+    *) Bugfix: fixed cleanup of partially initialized JavaScript contexts
+       when request setup failed.
+
+    Core:
+
+    *) Security: fixed a heap buffer overflow while parsing namespace
+       prefix lists passed to XML exclusive canonicalization.
+       Thanks to Vladimir Vulnerability Research Tech Lead @ Cyera,
+       evilgensec.
+
+    *) Bugfix: fixed a stack buffer overflow when exporting RSA keys
+       larger than 4096 bits to JWK in WebCrypto.
+       Thanks to Vaibhav Rajput.
+
+    *) Bugfix: fixed RSA-OAEP encryption and decryption with SHA-256 and
+       SHA-384 digests in WebCrypto.
+
+    *) Bugfix: fixed compatibility with quickjs-ng 0.16.0 and later.
+
+    *) Bugfix: fixed empty stack traces for QuickJS errors created by
+       host callbacks.
+
+    *) Feature: added btoa() and atob() global functions to the QuickJS
+       engine and aligned their behavior between both engines.
+
 Changes with njs 1.0.0                                       23 Jun 2026
 
     nginx modules:

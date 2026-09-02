@@ -181,12 +181,15 @@ $t->write_file('test.js', <<EOF);
 
     function property(r) {
         var opts = {headers:{}};
+        var url = r.args.raw
+                  ? `http://127.0.0.1:$p2/\${r.args.raw}`
+                  : 'http://127.0.0.1:$p0/loc';
 
         if (r.args.code) {
             opts.headers.code = r.args.code;
         }
 
-        var p = ngx.fetch('http://127.0.0.1:$p0/loc', opts)
+        var p = ngx.fetch(url, opts)
 
         if (r.args.readBody) {
             p = p.then(rep =>
@@ -472,7 +475,7 @@ EOF
 
 $t->try_run('no njs.fetch');
 
-$t->plan(41);
+$t->plan(45);
 
 $t->run_daemon(\&http_daemon, port(8082));
 $t->waitforsocket('127.0.0.1:' . port(8082));
@@ -503,6 +506,14 @@ like(http_get('/property?pr=statusText'), qr/200 OK.*OK$/s,
 	'fetch statusText OK');
 like(http_get('/property?pr=statusText&code=403'), qr/200 OK.*Forbidden$/s,
 	'fetch statusText Forbidden');
+like(http_get('/property?pr=statusText&raw=status_text_empty_lf'),
+	qr/200 OK.*\x0d\x0a\x0d\x0a$/s, 'fetch empty statusText LF');
+like(http_get('/property?pr=statusText&raw=status_text_iis_lf'),
+	qr/200 OK.*\x0d\x0a\x0d\x0a$/s, 'fetch empty statusText IIS LF');
+like(http_get('/property?pr=statusText&raw=status_text_empty_crlf'),
+	qr/200 OK.*\x0d\x0a\x0d\x0a$/s, 'fetch empty statusText CRLF');
+like(http_get('/property?pr=statusText&raw=status_text_no_space_lf'),
+	qr/200 OK.*\x0d\x0a\x0d\x0a$/s, 'fetch empty statusText no space');
 like(http_get('/property?pr=type'), qr/200 OK.*basic$/s,
 	'fetch type');
 like(http_get('/header?loc=duplicate_header&h=BAR'), qr/200 OK.*"c"$/s,
@@ -642,6 +653,13 @@ sub http_daemon {
 
 	local $SIG{PIPE} = 'IGNORE';
 
+	my %status_lines = (
+		'/status_text_empty_lf' => "HTTP/1.1 200 \n",
+		'/status_text_iis_lf' => "HTTP/1.1 200.\n",
+		'/status_text_empty_crlf' => "HTTP/1.1 200 " . CRLF,
+		'/status_text_no_space_lf' => "HTTP/1.1 200\n",
+	);
+
 	while (my $client = $server->accept()) {
 		$client->autoflush(1);
 
@@ -655,7 +673,14 @@ sub http_daemon {
 
 		$uri = $1 if $headers =~ /^\S+\s+([^ ]+)\s+HTTP/i;
 
-		if ($uri eq '/status_line') {
+		if (exists $status_lines{$uri}) {
+			print $client
+				$status_lines{$uri} .
+				"Content-Length: 0" . CRLF .
+				"Connection: close" . CRLF .
+				CRLF;
+
+		} elsif ($uri eq '/status_line') {
 			print $client
 				"HTTP/1.1 2A";
 

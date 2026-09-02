@@ -1264,6 +1264,11 @@ ngx_js_http_parse_status_line(ngx_js_http_parse_t *hp, ngx_buf_t *b)
 
 done:
 
+    if (hp->status_text == NULL) {
+        hp->status_text = p;
+        hp->status_text_end = p;
+    }
+
     b->pos = p + 1;
     hp->state = sw_start;
 

@@ -1663,59 +1663,69 @@ njs_xml_c14n_visibility_cb(void *user_data, xmlNode *node, xmlNode *parent)
 }
 
 
+/* the C14N prefix list is a whitespace delimited list */
+#define njs_xml_ns_sep(c)                                                     \
+    ((c) == ' ' || (c) == '\t' || (c) == '\n' || (c) == '\r')
+
+
 static u_char **
 njs_xml_parse_ns_list(njs_vm_t *vm, njs_str_t *src)
 {
-    u_char    *p, **buf, **n, **out;
-    size_t  size, idx;
+    size_t  n;
+    u_char  *p, *end, *dst, **buf, **out;
 
-    out = NULL;
+    /*
+     * The pointers and the writable copy of the list are allocated as a single
+     * block, the copy follows the NULL terminated array of pointers to it.
+     * The tokens are counted exactly the way the list is split below.
+     */
 
-    p =  njs_mp_alloc(njs_vm_memory_pool(vm), src->length + 1);
-    if (njs_slow_path(p == NULL)) {
+    n = 0;
+    end = src->start + src->length;
+
+    for (p = src->start; p < end && *p != '\0'; /* void */) {
+        if (njs_xml_ns_sep(*p)) {
+            p++;
+            continue;
+        }
+
+        n++;
+
+        while (p < end && *p != '\0' && !njs_xml_ns_sep(*p)) {
+            p++;
+        }
+    }
+
+    if (njs_slow_path(n >= (SIZE_MAX - src->length - 1) / sizeof(u_char *))) {
         njs_vm_memory_error(vm);
         return NULL;
     }
 
-    memcpy(p, src->start, src->length);
-    p[src->length] = '\0';
-
-    size = 8;
-
-    buf = njs_mp_alloc(njs_vm_memory_pool(vm), size * sizeof(char *));
+    buf = njs_mp_alloc(njs_vm_memory_pool(vm),
+                       (n + 1) * sizeof(u_char *) + src->length + 1);
     if (njs_slow_path(buf == NULL)) {
         njs_vm_memory_error(vm);
         return NULL;
     }
 
+    dst = (u_char *) &buf[n + 1];
+
+    memcpy(dst, src->start, src->length);
+    dst[src->length] = '\0';
+
     out = buf;
+    p = dst;
 
     while (*p != '\0') {
-        idx = out - buf;
-
-        if (idx >= size) {
-            size *= 2;
-
-            n = njs_mp_alloc(njs_vm_memory_pool(vm), size * sizeof(char *));
-            if (njs_slow_path(buf == NULL)) {
-                njs_vm_memory_error(vm);
-                return NULL;
-            }
-
-            memcpy(n, buf, size * sizeof(char *) / 2);
-            buf = n;
-
-            out = &buf[idx];
+        if (njs_xml_ns_sep(*p)) {
+            *p++ = '\0';
+            continue;
         }
 
         *out++ = p;
 
-        while (*p != ' ' && *p != '\0') {
+        while (*p != '\0' && !njs_xml_ns_sep(*p)) {
             p++;
-        }
-
-        if (*p == ' ') {
-            *p++ = '\0';
         }
     }
 

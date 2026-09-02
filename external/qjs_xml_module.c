@@ -100,7 +100,7 @@ static int qjs_xml_attr_get_own_property_names(JSContext *cx,
     JSPropertyEnum **ptab, uint32_t *plen, JSValueConst obj);
 static void qjs_xml_attr_finalizer(JSRuntime *rt, JSValue val);
 
-static u_char **qjs_xml_parse_ns_list(JSContext *cx, u_char *src);
+static u_char **qjs_xml_parse_ns_list(JSContext *cx, njs_str_t *src);
 static int qjs_xml_c14n_visibility_cb(void *user_data, xmlNode *node,
     xmlNode *parent);
 static int qjs_xml_buf_write_cb(void *context, const char *buffer, int len);
@@ -245,11 +245,12 @@ qjs_xml_canonicalization(JSContext *cx, JSValueConst this_val, int argc,
     JSValueConst *argv, int magic)
 {
     int              comments;
-    u_char           **prefix_list, *pref;
+    u_char           **prefix_list;
     xmlDoc           *doc;
     xmlNode          *node;
     ssize_t          size;
     JSValue          excluding, prefixes, ret;
+    njs_str_t        pref;
     njs_chb_t        chain;
     qjs_xml_node_t   *nd;
     qjs_xml_nset_t   *nset, *children;
@@ -309,13 +310,15 @@ qjs_xml_canonicalization(JSContext *cx, JSValueConst this_val, int argc,
             goto fail;
         }
 
-        pref = (u_char *) JS_ToCString(cx, prefixes);
-        if (pref == NULL) {
-            JS_ThrowOutOfMemory(cx);
+        pref.start = (u_char *) JS_ToCStringLen(cx, &pref.length, prefixes);
+        if (pref.start == NULL) {
             goto fail;
         }
 
-        prefix_list = qjs_xml_parse_ns_list(cx, pref);
+        prefix_list = qjs_xml_parse_ns_list(cx, &pref);
+
+        JS_FreeCString(cx, (char *) pref.start);
+
         if (prefix_list == NULL) {
             goto fail;
         }
@@ -1720,46 +1723,67 @@ qjs_xml_attr_finalizer(JSRuntime *rt, JSValue val)
 }
 
 
+/* the C14N prefix list is a whitespace delimited list */
+#define qjs_xml_ns_sep(c)                                                     \
+    ((c) == ' ' || (c) == '\t' || (c) == '\n' || (c) == '\r')
+
+
 static u_char **
-qjs_xml_parse_ns_list(JSContext *cx, u_char *src)
+qjs_xml_parse_ns_list(JSContext *cx, njs_str_t *src)
 {
-    u_char    *p, **buf, **out;
-    size_t  size, idx;
+    size_t  n;
+    u_char  *p, *end, *dst, **buf, **out;
 
-    size = 8;
-    p = src;
+    /*
+     * The pointers and the writable copy of the list are allocated as a single
+     * block, the copy follows the NULL terminated array of pointers to it.
+     * The tokens are counted exactly the way the list is split below.
+     */
 
-    buf = js_mallocz(cx, size * sizeof(char *));
-    if (buf == NULL) {
+    n = 0;
+    end = src->start + src->length;
+
+    for (p = src->start; p < end && *p != '\0'; /* void */) {
+        if (qjs_xml_ns_sep(*p)) {
+            p++;
+            continue;
+        }
+
+        n++;
+
+        while (p < end && *p != '\0' && !qjs_xml_ns_sep(*p)) {
+            p++;
+        }
+    }
+
+    if (n >= (SIZE_MAX - src->length - 1) / sizeof(u_char *)) {
         JS_ThrowOutOfMemory(cx);
         return NULL;
     }
 
+    buf = js_malloc(cx, (n + 1) * sizeof(u_char *) + src->length + 1);
+    if (buf == NULL) {
+        return NULL;
+    }
+
+    dst = (u_char *) &buf[n + 1];
+
+    memcpy(dst, src->start, src->length);
+    dst[src->length] = '\0';
+
     out = buf;
+    p = dst;
 
     while (*p != '\0') {
-        idx = out - buf;
-
-        if (idx >= size) {
-            size *= 2;
-
-            buf = js_realloc(cx, buf, size * sizeof(char *));
-            if (buf == NULL) {
-                JS_ThrowOutOfMemory(cx);
-                return NULL;
-            }
-
-            out = &buf[idx];
+        if (qjs_xml_ns_sep(*p)) {
+            *p++ = '\0';
+            continue;
         }
 
         *out++ = p;
 
-        while (*p != ' ' && *p != '\0') {
+        while (*p != '\0' && !qjs_xml_ns_sep(*p)) {
             p++;
-        }
-
-        if (*p == ' ') {
-            *p++ = '\0';
         }
     }
 

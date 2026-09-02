@@ -150,6 +150,45 @@ http {
             js_content test.content;
         }
 
+        location /access_throw {
+            js_access test.access_throw;
+            js_content test.content;
+        }
+
+        location /access_reject {
+            js_access test.access_reject;
+            js_content test.content;
+        }
+
+        location /access_catch {
+            js_access test.access_catch;
+            js_content test.content;
+        }
+
+        location /access_json_reject {
+            client_body_buffer_size 4k;
+            js_access test.access_json_reject;
+            js_content test.content;
+        }
+
+        location /access_redirect_reject {
+            js_access test.access_redirect_reject;
+            js_content test.content;
+        }
+
+        location /access_deny_throw {
+            js_access test.access_deny_throw;
+            js_content test.content;
+        }
+
+        location /access_sent_deny_throw {
+            js_access test.access_sent_deny_throw;
+            js_content test.content;
+        }
+
+        location /access_secret {
+            js_content test.secret;
+        }
 
     }
 
@@ -253,15 +292,72 @@ $t->write_file('test.js', <<EOF);
         r.return(200, 'echo:' + r.requestText);
     }
 
+    // js_access must fail closed when the async body-read continuation
+    // throws: an invalid body denies, a valid body allows.
+    function access_throw(r) {
+        return r.readRequestText().then(body => {
+            let data = JSON.parse(body);
+            r.variables.foo = data.name;
+        });
+    }
+
+    // js_access must fail closed on a returned rejected promise
+    // (no body read involved).
+    function access_reject(r) {
+        return Promise.reject(new Error('boom'));
+    }
+
+    // control: a caught rejection allows the request.
+    function access_catch(r) {
+        return r.readRequestText().then(body => {
+            JSON.parse(body);
+        }).catch(e => {
+            r.variables.foo = 'caught';
+        });
+    }
+
+    function access_json_reject(r) {
+        return r.readRequestJSON().then(data => {
+            r.variables.foo = data.name;
+        });
+    }
+
+    async function access_redirect_reject(r) {
+        await new Promise(resolve => setTimeout(resolve, 5));
+        r.internalRedirect('/access_secret');
+        throw new Error('after redirect');
+    }
+
+    function access_deny_throw(r) {
+        return r.readRequestText().then(body => {
+            r.return(403);
+            JSON.parse(body);
+        });
+    }
+
+    function access_sent_deny_throw(r) {
+        return r.readRequestText().then(body => {
+            r.return(403, 'denied');
+            JSON.parse(body);
+        });
+    }
+
+    function secret(r) {
+        r.return(200, 'SECRET');
+    }
+
     export default { content, content_async, content_text, read_text,
                      read_text_timeout, read_buffer, read_text_twice,
                      read_buffer_twice, read_concurrent_text_buffer,
                      read_text_then_buffer, read_json, read_json_invalid,
-                     read_text_length, echo_body };
+                     read_text_length, echo_body, access_throw, access_reject,
+                     access_catch, access_json_reject,
+                     access_redirect_reject, access_deny_throw,
+                     access_sent_deny_throw, secret };
 
 EOF
 
-$t->try_run('no js_access')->plan(23);
+$t->try_run('no js_access')->plan(31);
 
 ###############################################################################
 
@@ -321,6 +417,28 @@ like(http_post_chunked_too_large('/too_large_chunked'),
 like(http_post('/text'), qr/var:REQ-BODY/,
 	'readRequestText works after chunked 413');
 
+like(http_post_json('/access_throw', '{"name":"ok"}'), qr/var:ok/,
+	'js_access async body read allows on success');
+like(http_post_json('/access_throw', 'not-json'),
+	qr/500 Internal Server Error/,
+	'js_access fails closed when async continuation throws');
+like(http_post('/access_reject'), qr/500 Internal Server Error/,
+	'js_access fails closed on returned rejected promise');
+like(http_post_json('/access_catch', 'not-json'), qr/var:caught/,
+	'js_access allows when rejection is caught');
+like(http_post_big_invalid('/access_json_reject'),
+	qr/500 Internal Server Error/,
+	'js_access fails closed on async readRequestJSON rejection');
+like(http_get('/access_redirect_reject'),
+	qr/500 Internal Server Error/,
+	'js_access timeout rejection overrides internal redirect');
+like(http_post_json('/access_deny_throw', 'not-json'),
+	qr/500 Internal Server Error/,
+	'js_access rejection overrides uncommitted deny');
+like(http_post_json('/access_sent_deny_throw', 'not-json'),
+	qr/403 Forbidden.*denied/s,
+	'js_access preserves committed deny response');
+
 ###############################################################################
 
 sub http_post {
@@ -356,6 +474,19 @@ sub http_post_big {
 		"Content-Length: 10240" . CRLF .
 		CRLF .
 		("1234567890" x 1024);
+
+	return http($p, %extra);
+}
+
+sub http_post_big_invalid {
+	my ($url, %extra) = @_;
+	my $body = 'x' x 10240;
+
+	my $p = "POST $url HTTP/1.0" . CRLF .
+		"Host: localhost" . CRLF .
+		"Content-Length: " . length($body) . CRLF .
+		CRLF .
+		$body;
 
 	return http($p, %extra);
 }

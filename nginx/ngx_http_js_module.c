@@ -1560,12 +1560,6 @@ ngx_http_js_access_handler(ngx_http_request_t *r)
 
         ctx->in_progress = 0;
 
-        if (ctx->rejected_promises != NULL
-            && ctx->rejected_promises->items > 0)
-        {
-            return NGX_HTTP_INTERNAL_SERVER_ERROR;
-        }
-
         return ngx_http_js_access_finalize(r, ctx);
     }
 
@@ -1629,14 +1623,22 @@ ngx_http_js_access_finalize(ngx_http_request_t *r, ngx_http_js_ctx_t *ctx)
 {
     ngx_int_t  rc;
 
-    if (ctx->redirect_uri.len) {
-        rc = ngx_http_js_internal_redirect(r, ctx);
-        ngx_http_finalize_request(r, rc);
+    if (r->header_sent) {
+        ngx_http_finalize_request(r, NGX_OK);
         return NGX_DONE;
     }
 
-    if (r->header_sent) {
-        ngx_http_finalize_request(r, NGX_OK);
+    if (ctx->status == NGX_HTTP_INTERNAL_SERVER_ERROR
+        || (ctx->rejected_promises != NULL
+            && ctx->rejected_promises->items > 0))
+    {
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return NGX_DONE;
+    }
+
+    if (ctx->redirect_uri.len) {
+        rc = ngx_http_js_internal_redirect(r, ctx);
+        ngx_http_finalize_request(r, rc);
         return NGX_DONE;
     }
 
@@ -3781,6 +3783,10 @@ static void
 ngx_http_js_access_body_finalize(ngx_http_request_t *r, ngx_http_js_ctx_t *ctx,
     ngx_int_t rc)
 {
+    if (rc == NGX_ERROR) {
+        ctx->status = NGX_HTTP_INTERNAL_SERVER_ERROR;
+    }
+
     switch (ngx_http_js_body_read_phase(ctx->body_read_state)) {
     case NGX_HTTP_JS_BODY_READ_IN_PROGRESS:
         ctx->body_read_state = NGX_HTTP_JS_BODY_READ_IDLE;

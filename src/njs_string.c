@@ -2941,18 +2941,16 @@ done:
 
 
 njs_int_t
-njs_string_get_substitution(njs_vm_t *vm, njs_value_t *matched,
-    njs_value_t *string, int64_t pos, njs_value_t *captures, int64_t ncaptures,
+njs_string_get_substitution(njs_vm_t *vm, njs_str_t *matched, njs_str_t *head,
+    njs_str_t *tail, njs_value_t *captures, int64_t ncaptures,
     njs_value_t *groups, njs_value_t *replacement, njs_value_t *retval)
 {
-    u_char             c, c2, *p, *r, *end;
-    size_t             length;
-    int64_t            tail, n;
-    njs_str_t          rep, str, cap;
-    njs_int_t          ret;
-    njs_chb_t          chain;
-    njs_value_t        name, value;
-    njs_string_prop_t  s, m;
+    u_char       c, c2, *p, *r, *end;
+    int64_t      n;
+    njs_str_t    rep, str, cap;
+    njs_int_t    ret;
+    njs_chb_t    chain;
+    njs_value_t  name, value;
 
     njs_string_get(vm, replacement, &rep);
     p = rep.start;
@@ -2984,26 +2982,17 @@ njs_string_get_substitution(njs_vm_t *vm, njs_value_t *matched,
             break;
 
         case '&':
-            (void) njs_string_prop(vm, &m, matched);
-            njs_chb_append(&chain, m.start, m.size);
+            njs_chb_append_str(&chain, matched);
             p += 2;
             break;
 
         case '`':
-            (void) njs_string_prop(vm, &s, string);
-            n = njs_string_offset(&s, pos) - s.start;
-            njs_chb_append(&chain, s.start, n);
+            njs_chb_append_str(&chain, head);
             p += 2;
             break;
 
         case '\'':
-            length = njs_string_prop(vm, &m, matched);
-            (void) njs_string_prop(vm, &s, string);
-
-            tail = njs_string_offset(&s, pos + length) - s.start;
-
-            njs_chb_append(&chain, &s.start[tail],
-                           njs_max((int64_t) s.size - tail, 0));
+            njs_chb_append_str(&chain, tail);
             p += 2;
             break;
 
@@ -3104,7 +3093,7 @@ njs_string_prototype_replace(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     size_t             length, size, end_of_last_match;
     int64_t            pos;
     njs_int_t          ret;
-    njs_str_t          str;
+    njs_str_t          str, m, head, tail;
     njs_chb_t          chain;
     njs_value_t        *this, *search, *replace;
     njs_value_t        search_lvalue, replace_lvalue, replacer, value,
@@ -3198,9 +3187,20 @@ njs_string_prototype_replace(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
         return NJS_OK;
     }
 
+    m.start = s.start;
+    m.length = s.size;
+
     if (!replaceAll) {
+        end = njs_string_offset(&string, pos);
+
         if (func_replace == NULL) {
-            ret = njs_string_get_substitution(vm, search, this, pos, NULL, 0,
+            head.start = string.start;
+            head.length = end - string.start;
+
+            tail.start = (u_char *) end + s.size;
+            tail.length = (string.start + string.size) - (end + s.size);
+
+            ret = njs_string_get_substitution(vm, &m, &head, &tail, NULL, 0,
                                               NULL, replace, &value);
             if (njs_slow_path(ret != NJS_OK)) {
                 return ret;
@@ -3222,8 +3222,6 @@ njs_string_prototype_replace(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
                 return NJS_ERROR;
             }
         }
-
-        end = njs_string_offset(&string, pos);
 
         (void) njs_string_prop(vm, &ret_string, &value);
 
@@ -3247,8 +3245,16 @@ njs_string_prototype_replace(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     start = string.start;
 
     do {
+        end = njs_string_offset(&string, pos);
+
         if (func_replace == NULL) {
-            ret = njs_string_get_substitution(vm, search, this, pos, NULL, 0,
+            head.start = string.start;
+            head.length = end - string.start;
+
+            tail.start = (u_char *) end + s.size;
+            tail.length = (string.start + string.size) - (end + s.size);
+
+            ret = njs_string_get_substitution(vm, &m, &head, &tail, NULL, 0,
                                               NULL, replace, &value);
             if (njs_slow_path(ret != NJS_OK)) {
                 return ret;
@@ -3271,7 +3277,6 @@ njs_string_prototype_replace(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
             }
         }
 
-        end = njs_string_offset(&string, pos);
         (void) njs_string_prop(vm, &ret_string, &value);
 
         njs_chb_append(&chain, start, end - start);

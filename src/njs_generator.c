@@ -117,6 +117,15 @@ njs_generate_is_property_lvalue(njs_parser_node_t *node)
 }
 
 
+static njs_bool_t
+njs_generate_is_declaration(njs_parser_node_t *node)
+{
+    return node->token_type == NJS_TOKEN_VAR
+           || node->token_type == NJS_TOKEN_LET
+           || node->token_type == NJS_TOKEN_CONST;
+}
+
+
 njs_inline njs_bool_t
 njs_generate_is_property_call_source(njs_parser_node_t *node)
 {
@@ -294,8 +303,6 @@ static njs_int_t njs_generate_for_in_object_wo_decl(njs_vm_t *vm,
 static njs_int_t njs_generate_for_in_object_left_hand_expr(njs_vm_t *vm,
     njs_generator_t *generator, njs_parser_node_t *node);
 static njs_int_t njs_generate_for_in_body(njs_vm_t *vm,
-    njs_generator_t *generator, njs_parser_node_t *node);
-static njs_int_t njs_generate_for_in_body_wo_decl(njs_vm_t *vm,
     njs_generator_t *generator, njs_parser_node_t *node);
 static njs_int_t njs_generate_for_in_body_left_hand_expr(njs_vm_t *vm,
     njs_generator_t *generator, njs_parser_node_t *node);
@@ -2085,28 +2092,40 @@ njs_generate_for_end(njs_vm_t *vm, njs_generator_t *generator,
 
 
 static njs_int_t
-njs_generate_for_let_update(njs_vm_t *vm, njs_generator_t *generator,
-    njs_parser_node_t *node)
+njs_generate_let_update(njs_vm_t *vm, njs_generator_t *generator,
+    njs_parser_node_t *let)
 {
-    njs_parser_node_t         *let;
     njs_vmcode_variable_t     *code_var;
     njs_variable_reference_t  *ref;
 
+    if (let->token_type != NJS_TOKEN_LET
+        && let->token_type != NJS_TOKEN_CONST)
+    {
+        return NJS_DECLINED;
+    }
+
+    ref = &let->left->u.reference;
+
+    if (ref->variable->closure) {
+        njs_generate_code(generator, njs_vmcode_variable_t, code_var,
+                          NJS_VMCODE_LET_UPDATE, let);
+        code_var->dst = let->left->index;
+    }
+
+    return NJS_OK;
+}
+
+
+static njs_int_t
+njs_generate_for_let_update(njs_vm_t *vm, njs_generator_t *generator,
+    njs_parser_node_t *node)
+{
+    njs_int_t  ret;
+
     while (node != NULL && node->token_type == NJS_TOKEN_STATEMENT) {
-        let = node->right;
-
-        if (let->token_type != NJS_TOKEN_LET
-            && let->token_type != NJS_TOKEN_CONST)
-        {
-            return NJS_OK;
-        }
-
-        ref = &let->left->u.reference;
-
-        if (ref->variable->closure) {
-            njs_generate_code(generator, njs_vmcode_variable_t, code_var,
-                              NJS_VMCODE_LET_UPDATE, let);
-            code_var->dst = let->left->index;
+        ret = njs_generate_let_update(vm, generator, node->right);
+        if (ret != NJS_OK) {
+            return (ret == NJS_DECLINED) ? NJS_OK : ret;
         }
 
         node = node->left;
@@ -2199,80 +2218,17 @@ njs_generate_for_in_name_assign(njs_vm_t *vm, njs_generator_t *generator,
 
 
 static njs_int_t
-njs_generate_for_in_body_wo_decl(njs_vm_t *vm, njs_generator_t *generator,
-    njs_parser_node_t *node)
-{
-    njs_int_t                 ret;
-    njs_jump_off_t            prop_offset;
-    njs_parser_node_t         *foreach, *name;
-    njs_vmcode_prop_next_t    *prop_next;
-    njs_generator_loop_ctx_t  *ctx;
-
-    ctx = generator->context;
-
-    foreach = node->left;
-    name = foreach->left->right;
-
-    /* The loop iterator. */
-
-    if (name != NULL) {
-        ret = njs_generate_for_let_update(vm, generator, foreach->left);
-        if (njs_slow_path(ret != NJS_OK)) {
-            return ret;
-        }
-    }
-
-    njs_generate_patch_block(vm, generator, generator->block,
-                             NJS_GENERATOR_CONTINUATION);
-
-    njs_code_set_jump_offset(generator, njs_vmcode_prop_foreach_t,
-                             ctx->jump_offset);
-
-    njs_generate_code(generator, njs_vmcode_prop_next_t, prop_next,
-                      NJS_VMCODE_PROPERTY_NEXT, node->left->left);
-    prop_offset = njs_code_offset(generator, prop_next);
-    prop_next->retval = ctx->index_next_value;
-    prop_next->object = foreach->right->index;
-    prop_next->next = ctx->index;
-    prop_next->offset = ctx->loop_offset - prop_offset;
-
-    njs_generate_patch_block_exit(vm, generator);
-
-    /*
-     * Release object and iterator indexes: an object can be a function result
-     * or a property of another object and an iterator can be given with "let".
-     */
-    ret = njs_generate_children_indexes_release(vm, generator, foreach);
-    if (njs_slow_path(ret != NJS_OK)) {
-        return ret;
-    }
-
-    ret = njs_generate_index_release(vm, generator, ctx->index);
-    if (njs_slow_path(ret != NJS_OK)) {
-        return ret;
-    }
-
-    return njs_generator_stack_pop(vm, generator, ctx);
-}
-
-
-static njs_int_t
 njs_generate_for_in_object_wo_decl(njs_vm_t *vm, njs_generator_t *generator,
     njs_parser_node_t *node)
 {
     njs_int_t                  ret;
-    njs_parser_node_t          *foreach, *name;
+    njs_parser_node_t          *foreach;
     njs_generator_loop_ctx_t   *ctx;
     njs_vmcode_prop_foreach_t  *prop_foreach;
 
     ctx = generator->context;
 
     foreach = node->left;
-    name = foreach->left->right;
-
-    if (name != NULL) {
-        ctx->var->init = 1;
-    }
 
     njs_generate_code(generator, njs_vmcode_prop_foreach_t, prop_foreach,
                       NJS_VMCODE_PROPERTY_FOREACH, foreach);
@@ -2299,7 +2255,7 @@ njs_generate_for_in_object_wo_decl(njs_vm_t *vm, njs_generator_t *generator,
 
     ret = njs_generator_after(vm, generator,
                                njs_queue_first(&generator->stack), node,
-                               njs_generate_for_in_body_wo_decl, ctx, 0);
+                               njs_generate_for_in_body, ctx, 0);
     if (ret != NJS_OK) {
         return ret;
     }
@@ -2340,29 +2296,25 @@ njs_generate_for_in_statement(njs_vm_t *vm, njs_generator_t *generator,
 
     foreach = node->left;
 
-    if (!njs_generate_is_property_lvalue(foreach->left)) {
-        name = foreach->left->right;
+    if (njs_generate_is_declaration(foreach->left)) {
+        name = foreach->left->left;
 
-        if (name != NULL) {
-            name = name->left;
-
-            ret = njs_generate_variable_wo_dest(vm, generator, name,
+        ret = njs_generate_variable_wo_dest(vm, generator, name,
                                             NJS_DECLARATION, &ctx.var);
-            if (njs_slow_path(ret != NJS_OK)) {
-                return NJS_ERROR;
-            }
-
-            foreach->left->index = name->index;
-
-            njs_generator_next(generator, njs_generate, foreach->right);
-
-            return njs_generator_after(vm, generator,
-                                       njs_queue_first(&generator->stack), node,
-                                       njs_generate_for_in_object,
-                                       &ctx, sizeof(njs_generator_loop_ctx_t));
+        if (njs_slow_path(ret != NJS_OK)) {
+            return NJS_ERROR;
         }
 
-    } else {
+        ctx.index_next_value = name->index;
+
+        njs_generator_next(generator, njs_generate, foreach->right);
+
+        return njs_generator_after(vm, generator,
+                                   njs_queue_first(&generator->stack), node,
+                                   njs_generate_for_in_object,
+                                   &ctx, sizeof(njs_generator_loop_ctx_t));
+
+    } else if (njs_generate_is_property_lvalue(foreach->left)) {
 
         /* foreach->right is object in 'in object'. */
 
@@ -2373,14 +2325,19 @@ njs_generate_for_in_statement(njs_vm_t *vm, njs_generator_t *generator,
                                    njs_generate_for_in_object_left_hand_expr,
                                    &ctx, sizeof(njs_generator_loop_ctx_t));
 
+    } else if (foreach->left->token_type == NJS_TOKEN_NAME) {
+
+        njs_generator_next(generator, njs_generate, foreach->right);
+
+        return njs_generator_after(vm, generator,
+                                   njs_queue_first(&generator->stack), node,
+                                   njs_generate_for_in_object_wo_decl,
+                                   &ctx, sizeof(njs_generator_loop_ctx_t));
     }
 
-    njs_generator_next(generator, njs_generate, foreach->right);
+    njs_internal_error(vm, "unexpected for-in target");
 
-    return  njs_generator_after(vm, generator,
-                              njs_queue_first(&generator->stack), node,
-                              njs_generate_for_in_object_wo_decl,
-                              &ctx, sizeof(njs_generator_loop_ctx_t));
+    return NJS_ERROR;
 }
 
 
@@ -2487,18 +2444,14 @@ static njs_int_t
 njs_generate_for_in_object(njs_vm_t *vm, njs_generator_t *generator,
     njs_parser_node_t *node)
 {
-    njs_parser_node_t          *foreach, *name;
+    njs_parser_node_t          *foreach;
     njs_generator_loop_ctx_t   *ctx;
     njs_vmcode_prop_foreach_t  *prop_foreach;
 
     ctx = generator->context;
 
     foreach = node->left;
-    name = foreach->left->right;
-
-    if (name != NULL) {
-        ctx->var->init = 1;
-    }
+    ctx->var->init = 1;
 
     njs_generate_code(generator, njs_vmcode_prop_foreach_t, prop_foreach,
                       NJS_VMCODE_PROPERTY_FOREACH, foreach);
@@ -2578,20 +2531,19 @@ njs_generate_for_in_body(njs_vm_t *vm, njs_generator_t *generator,
 {
     njs_int_t                 ret;
     njs_jump_off_t            prop_offset;
-    njs_parser_node_t         *foreach, *name;
+    njs_parser_node_t         *foreach;
     njs_vmcode_prop_next_t    *prop_next;
     njs_generator_loop_ctx_t  *ctx;
 
     ctx = generator->context;
 
     foreach = node->left;
-    name = foreach->left->right;
 
     /* The loop iterator. */
 
-    if (name != NULL) {
-        ret = njs_generate_for_let_update(vm, generator, foreach->left);
-        if (njs_slow_path(ret != NJS_OK)) {
+    if (njs_generate_is_declaration(foreach->left)) {
+        ret = njs_generate_let_update(vm, generator, foreach->left);
+        if (njs_slow_path(ret != NJS_OK && ret != NJS_DECLINED)) {
             return ret;
         }
     }
@@ -2605,7 +2557,7 @@ njs_generate_for_in_body(njs_vm_t *vm, njs_generator_t *generator,
     njs_generate_code(generator, njs_vmcode_prop_next_t, prop_next,
                       NJS_VMCODE_PROPERTY_NEXT, node->left->left);
     prop_offset = njs_code_offset(generator, prop_next);
-    prop_next->retval = foreach->left->index;
+    prop_next->retval = ctx->index_next_value;
     prop_next->object = foreach->right->index;
     prop_next->next = ctx->index;
     prop_next->offset = ctx->loop_offset - prop_offset;

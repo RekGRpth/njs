@@ -585,6 +585,7 @@ njs_mp_alloc_large(njs_mp_t *mp, size_t alignment, size_t size)
     u_char          *p;
     size_t          aligned_size;
     uint8_t         type;
+    njs_bool_t      discrete;
     njs_mp_block_t  *block;
 
     /* Allocation must be less than 4G. */
@@ -600,7 +601,14 @@ njs_mp_alloc_large(njs_mp_t *mp, size_t alignment, size_t size)
     size += size == 0;
 #endif
 
-    if (njs_is_power_of_two(size)) {
+    discrete = njs_is_power_of_two(size);
+
+#if (NJS_HAVE_ADDRESS_SANITIZER)
+    /* Keep the sanitizer redzone right after the object. */
+    discrete = 1;
+#endif
+
+    if (discrete) {
         block = njs_malloc(sizeof(njs_mp_block_t));
         if (njs_slow_path(block == NULL)) {
             return NULL;

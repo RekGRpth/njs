@@ -5193,6 +5193,15 @@ static njs_unit_test_t  njs_test[] =
               "njs.dump(a2)"),
       njs_str("[3,1,<1111110 empty items>,2,4]") },
 
+    { njs_str("var a = []; a[2**32 - 7] = 2; a[2**32 - 2] = 1;"
+              "a.sort(); [a.length, a[0], a[1], Object.keys(a)]"),
+      njs_str("4294967295,1,2,0,1") },
+
+    { njs_str("var a = []; a[100000] = 1;"
+              "var b = [].concat(a, [,, 5]);"
+              "[b.length, Object.keys(b), b[100001], b.sort().length]"),
+      njs_str("100004,100000,100003,,100004") },
+
     { njs_str("var re = /abc/; re[Symbol.isConcatSpreadable] = true;"
               "re[0] = 1, re[1] = 2, re[2] = 3, re.length = 3;"
               "[].concat(re)"),
@@ -6995,6 +7004,35 @@ static njs_unit_test_t  njs_test[] =
               ".every(v=>{var init = new v([1,2,3]); var a = new v(4);"
               "           try {a.set(init,Infinity)} catch (e) {return e.name == 'RangeError'};})"),
       njs_str("true") },
+
+    { njs_str("var a = new Uint8Array([1]);"
+              "Object.defineProperty(a, 'x', {enumerable: true,"
+              "  get() { return this === a && this[0]; }});"
+              "Object.values(a)"),
+      njs_str("1,1") },
+
+    { njs_str("var a = new Uint8Array([1]);"
+              "Object.defineProperty(a, 'x', {enumerable: true,"
+              "  get() { this[0] = 2; return this[0]; }});"
+              "Object.values(a); a[0]"),
+      njs_str("2") },
+
+    { njs_str("[257, '257', NaN, 'NaN', Infinity, 'Infinity', -0, '-0']"
+              ".every(k => { try {"
+              "  Object.defineProperty(new Uint8Array(), k, {value: 1});"
+              "} catch (e) { return e.name == 'TypeError'; } })"),
+      njs_str("true") },
+
+    { njs_str("['01', ' 1', '0x10', '1e3'].every(k => {"
+              "var a = new Uint8Array();"
+              "Object.defineProperty(a, k, {value: 1}); return a[k] == 1; })"),
+      njs_str("true") },
+
+    { njs_str("var a = Buffer.from([1]);"
+              "Object.defineProperty(a, 'x', {enumerable: true,"
+              "  get() { return this === a && this[0]; }});"
+              "Object.values(a)"),
+      njs_str("1,1") },
 
     { njs_str(NJS_INT_TYPED_ARRAY_LIST
               ".map(v=>{try { var a = new v(1); $262.detachArrayBuffer(a.buffer); Object.entries(a)} "
@@ -10060,6 +10098,22 @@ static njs_unit_test_t  njs_test[] =
               "r[Symbol.replace]('ABCD', 'b')"),
       njs_str("b") },
 
+    { njs_str("var r = /./; r.exec = () => globalThis;"
+              "r[Symbol.replace]('', '') === ''"),
+      njs_str("true") },
+
+    { njs_str("var exec = RegExp.prototype.exec, saved;"
+              "var r = /a/; r.exec = function(s) {"
+              "  saved = exec.call(this, s); return saved; };"
+              "r[Symbol.replace]('a', 'b'); saved[0]"),
+      njs_str("a") },
+
+    { njs_str("var exec = RegExp.prototype.exec, saved;"
+              "RegExp.prototype.exec = function(s) {"
+              "  saved = exec.call(this, s); return saved; };"
+              "'a'.split(/a/); saved[0]"),
+      njs_str("a") },
+
     { njs_str("'α'.replace(/(h*)/g, '$1βγ')"),
       njs_str("βγαβγ") },
 
@@ -10148,6 +10202,14 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("'ABC'.replace(/(?<b>B)/, '|$<BB$$|>@')"),
       njs_str("A|@C") },
+
+    { njs_str("var s = '(?:' + '()'.repeat(127) + '){0}(?<x>a)';"
+              "new RegExp(s).exec('a').groups.x"),
+      njs_str("a") },
+
+    { njs_str("var s = '(?:' + '()'.repeat(383) + '){0}(?<x>a)';"
+              "new RegExp(s).exec('a').groups.x"),
+      njs_str("a") },
 
     { njs_str("'ABCB'.replaceAll(/(?<b>B)/g, '|$<BB$$|>@')"),
       njs_str("A|@C|@") },
@@ -14309,6 +14371,15 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("false.__proto__ === Boolean.prototype"),
       njs_str("true") },
 
+    { njs_str("var o = {valueOf() { o = 0; return {}; },"
+              "         toString() { return '7'; }}; +o"),
+      njs_str("7") },
+
+    { njs_str("var original = {toString() { return '7'; }}, o = original;"
+              "Object.defineProperty(original, 'valueOf', {get() {"
+              "  o = 0; return () => ({}); }}); +o"),
+      njs_str("7") },
+
     { njs_str("var b = Boolean(1); b.__proto__ === Boolean.prototype"),
       njs_str("true") },
 
@@ -15962,6 +16033,18 @@ static njs_unit_test_t  njs_test[] =
               "f(f);"
               "njs.dump(arr)"),
       njs_str("[1,'[Getter]']") },
+
+    { njs_str("var a = [1], n = 0;"
+              "Object.defineProperty(a, 0, {"
+              "  get get() { n++; a.unshift(0); return function() {}; }});"
+              "n"),
+      njs_str("1") },
+
+    { njs_str("var a = [1], n = 0;"
+              "Object.defineProperty(a, 'length', {"
+              "  get writable() { n++; return false; }});"
+              "n"),
+      njs_str("1") },
 
     { njs_str("Object.defineProperties()"),
       njs_str("TypeError: Object.defineProperties is called on non-object") },

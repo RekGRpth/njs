@@ -37,7 +37,7 @@ njs_value_to_primitive(njs_vm_t *vm, njs_value_t *dst, njs_value_t *value,
 {
     njs_int_t            ret;
     njs_uint_t           tries, force_ordinary;
-    njs_value_t          method, retval, arguments[2];
+    njs_value_t          input, method, retval, arguments[2];
     njs_flathsh_query_t  fhq;
 
     static const uint32_t atoms[] = {
@@ -55,6 +55,9 @@ njs_value_to_primitive(njs_vm_t *vm, njs_value_t *dst, njs_value_t *value,
         *dst = *value;
         return NJS_OK;
     }
+
+    input = *value;
+    value = &input;
 
     tries = 0;
     fhq.proto = &njs_object_hash_proto;
@@ -1075,9 +1078,7 @@ njs_value_property(njs_vm_t *vm, njs_value_t *value, uint32_t atom_id,
             return NJS_OK;
         }
 
-        if (njs_slow_path(!(njs_is_object(value)
-                            && njs_object(value)->fast_array)))
-        {
+        if (njs_slow_path(!njs_is_fast_array(value))) {
             goto slow_path;
         }
 
@@ -1194,9 +1195,7 @@ njs_value_property_set(njs_vm_t *vm, njs_value_t *value, uint32_t atom_id,
             return NJS_OK;
         }
 
-        if (njs_slow_path(!(njs_is_object(value)
-                            && njs_object(value)->fast_array)))
-        {
+        if (njs_slow_path(!njs_is_fast_array(value))) {
             goto slow_path;
         }
 

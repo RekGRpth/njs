@@ -139,6 +139,23 @@ njs_module_add(njs_vm_t *vm, njs_str_t *name, njs_value_t *value)
 }
 
 
+void
+njs_module_remove(njs_vm_t *vm, njs_mod_t *module)
+{
+    njs_flathsh_query_t  fhq;
+
+    fhq.key = module->name;
+    fhq.key_hash = njs_djb_hash(module->name.start, module->name.length);
+    fhq.pool = vm->mem_pool;
+    fhq.proto = &njs_modules_hash_proto;
+
+    (void) njs_flathsh_delete(&vm->shared->modules_hash, &fhq);
+
+    njs_mp_free(vm->mem_pool, module->name.start);
+    njs_mp_free(vm->mem_pool, module);
+}
+
+
 njs_int_t
 njs_module_require(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     njs_index_t unused, njs_value_t *retval)

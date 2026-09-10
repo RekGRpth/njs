@@ -119,6 +119,11 @@ njs_benchmark_test(njs_vm_t *parent, njs_opts_t *opts, njs_value_t *report,
     options.backtrace = 1;
     options.addons = njs_benchmark_addon_external_modules;
 
+    if (strncmp(test->name, "compile ", njs_length("compile ")) == 0) {
+        options.max_stack_size = 64 * 1024 * 1024;
+        options.unsafe = 1;
+    }
+
     vm = NULL;
     nvm = NULL;
     ret = NJS_ERROR;
@@ -285,6 +290,45 @@ static njs_benchmark_test_t  njs_test[] =
               "sum"),
       njs_str("4"),
       100000 },
+
+    { "compile array references 1M",
+      njs_str("Function('var x; return [' + 'x,'.repeat(999999) + 'x]'); 1"),
+      njs_str("1"),
+      1 },
+
+    { "compile sequential block declarations 100K",
+      njs_str("Function('{let x=0;}'.repeat(100000)); 1"),
+      njs_str("1"),
+      1 },
+
+    { "compile sequential labels 100K",
+      njs_str("Function('a:;'.repeat(100000)); 1"),
+      njs_str("1"),
+      1 },
+
+    { "compile unique declarations 100K",
+      njs_str("Function(Array(100000).fill(0)"
+              ".map((v, i) => 'let x' + i + '=0;').join('')); 1"),
+      njs_str("1"),
+      1 },
+
+    { "compile referenced declarations 100K",
+      njs_str("Function(Array(100000).fill(0)"
+              ".map((v, i) => 'let x' + i + '=0;x' + i + ';').join('')); 1"),
+      njs_str("1"),
+      1 },
+
+    { "compile closures 20K",
+      njs_str("Function('void function(){let x=1;return ()=>x;};'"
+              ".repeat(20000)); 1"),
+      njs_str("1"),
+      1 },
+
+    { "compile nested labels 10K",
+      njs_str("Function(Array(10000).fill(0)"
+              ".map((v, i) => 'a' + i + ':').join('') + ';'); 1"),
+      njs_str("1"),
+      1 },
 
     { "string create 'abcdefABCDEF'",
       njs_str("benchmark.string('create', 'abcdef', 1000000)"),

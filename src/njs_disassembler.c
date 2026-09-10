@@ -202,6 +202,7 @@ njs_disassemble(u_char *start, u_char *end, njs_int_t count, njs_arr_t *lines)
     njs_vmcode_2addr_t           *code2;
     njs_vmcode_3addr_t           *code3;
     njs_vmcode_array_t           *array;
+    njs_vmcode_array_init_t      *array_init;
     njs_vmcode_catch_t           *catch;
     njs_vmcode_import_t          *import;
     njs_vmcode_finally_t         *finally;
@@ -238,6 +239,18 @@ njs_disassemble(u_char *start, u_char *end, njs_int_t count, njs_arr_t *lines)
                        (size_t) array->length, array->ctor ? " INIT" : "");
 
             p += sizeof(njs_vmcode_array_t);
+
+            continue;
+        }
+
+        if (operation == NJS_VMCODE_ARRAY_INIT) {
+            array_init = (njs_vmcode_array_init_t *) p;
+
+            njs_printf("%5uD | %05uz ARRAY INIT        %04Xz %04Xz %uD\n",
+                       line, p - start, (size_t) array_init->array,
+                       (size_t) array_init->value, array_init->index);
+
+            p += sizeof(njs_vmcode_array_init_t);
 
             continue;
         }

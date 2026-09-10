@@ -293,14 +293,15 @@ static const njs_lexer_multi_t  njs_assignment_token[] = {
 
 
 njs_int_t
-njs_lexer_init(njs_vm_t *vm, njs_lexer_t *lexer, njs_str_t *file,
-    u_char *start, u_char *end)
+njs_lexer_init(njs_vm_t *vm, njs_mp_t *mem_pool, njs_lexer_t *lexer,
+    njs_str_t *file, u_char *start, u_char *end)
 {
     lexer->file = *file;
     lexer->start = start;
     lexer->end = end;
     lexer->line = 1;
     lexer->vm = vm;
+    lexer->mem_pool = mem_pool;
 
     njs_queue_init(&lexer->preread);
 
@@ -314,7 +315,7 @@ njs_lexer_next_token(njs_lexer_t *lexer)
     njs_int_t          ret;
     njs_lexer_token_t  *token;
 
-    token = njs_mp_zalloc(lexer->vm->mem_pool, sizeof(njs_lexer_token_t));
+    token = njs_mp_zalloc(lexer->mem_pool, sizeof(njs_lexer_token_t));
     if (njs_slow_path(token == NULL)) {
         return NULL;
     }
@@ -429,7 +430,7 @@ njs_lexer_consume_token(njs_lexer_t *lexer, unsigned length)
 
         njs_queue_remove(lnk);
 
-        njs_mp_free(lexer->vm->mem_pool, token);
+        njs_mp_free(lexer->mem_pool, token);
     }
 }
 

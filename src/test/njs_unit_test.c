@@ -1158,6 +1158,22 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("var a = 1; function f(x) { a = x; return 2 }; a += f(5)"),
       njs_str("3") },
 
+    { njs_str("var src = 'var a=1;return a+' + '('.repeat(256)"
+              "+ '0+'.repeat(256) + '(a=2)' + ')'.repeat(256);"
+              "(new Function(src))()"),
+      njs_str("3") },
+
+    { njs_str("var src = 'var a=1;a+=' + '('.repeat(256)"
+              "+ '0+'.repeat(256) + '(a=2)' + ')'.repeat(256) + ';return a';"
+              "(new Function(src))()"),
+      njs_str("3") },
+
+    { njs_str("var src = 'var i=0,a=[];a[i]=' + '['.repeat(256)"
+              "+ '(i=1)' + ']'.repeat(256)"
+              "+ ';return a[0] !== undefined && a[1] === undefined';"
+              "(new Function(src))()"),
+      njs_str("true") },
+
     { njs_str("var x; x in (x = 1, [1, 2, 3])"),
       njs_str("false") },
 
@@ -3973,6 +3989,18 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("a : var n = 0; b :++n"),
       njs_str("1") },
 
+    { njs_str("var r = 0; outer: for (;;) { inner: break outer; r++ } r"),
+      njs_str("0") },
+
+    { njs_str("var r = 0; outer: for (; r < 3; r++) {"
+                  "inner: continue outer } r"),
+      njs_str("3") },
+
+    { njs_str("var x = 0, f = () => ++x;"
+                  "a: x = 1; b: x++; c: f(); d: [1,2].length;"
+                  "e: 's'; g: typeof x; x"),
+      njs_str("3") },
+
     { njs_str("a:{a:1}"),
       njs_str("SyntaxError: Label \"a\" has already been declared") },
 
@@ -4902,6 +4930,25 @@ static njs_unit_test_t  njs_test[] =
     { njs_str("var n = 1, a = [ n += 1 ]; a"),
       njs_str("2") },
 
+    { njs_str("var a = 1; a = [a, 2]"),
+      njs_str("1,2") },
+
+    { njs_str("var a; a = [(a = 1, 2)]"),
+      njs_str("2") },
+
+    { njs_str("var i = 0; [i++, i++, i++]"),
+      njs_str("0,1,2") },
+
+    { njs_str("var a = [, 1, , 2, ,];"
+              "[a.length, Object.keys(a).length, 0 in a, 4 in a]"),
+      njs_str("5,2,false,false") },
+
+    { njs_str("njs.dump([1, [2, [3, 4]], 5])"),
+      njs_str("[1,[2,[3,4]],5]") },
+
+    { njs_str("var a = 1; a += [(a = 5, 1)][0]; a"),
+      njs_str("2") },
+
     { njs_str("var a = [ 1, 2; 3 ]; a[0] + a[1] + a[2]"),
       njs_str("SyntaxError: Unexpected token \";\"") },
 
@@ -5000,6 +5047,11 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("[1,2].length"),
       njs_str("2") },
+
+    { njs_str("var src = 'return [' + '1,'.repeat(32760) + '1]';"
+              "var a = Function(src)();"
+              "[a.length, a[0], a[32760], Object.keys(a).length]"),
+      njs_str("32761,1,1,32761") },
 
     { njs_str("var a = [1,2]; a.length"),
       njs_str("2") },
@@ -15357,6 +15409,11 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("var sum = new Function('a, b', 'return a + b');"
               "sum(2, 4);"),
+      njs_str("6") },
+
+    { njs_str("(new Function('a',"
+              " 'return function(b) { return function(c) {"
+              " return a + b + c; }; };'))(1)(2)(3)"),
       njs_str("6") },
 
     { njs_str("var sum = new Function('a, b', 'c', 'return a + b + c');"

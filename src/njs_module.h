@@ -16,6 +16,7 @@ struct njs_mod_s {
 
 
 njs_mod_t *njs_module_add(njs_vm_t *vm, njs_str_t *name, njs_value_t *value);
+void njs_module_remove(njs_vm_t *vm, njs_mod_t *module);
 njs_mod_t *njs_module_find(njs_vm_t *vm, njs_str_t *name,
     njs_bool_t shared);
 njs_int_t njs_module_require(njs_vm_t *vm, njs_value_t *args,

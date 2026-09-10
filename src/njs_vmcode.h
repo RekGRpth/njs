@@ -37,6 +37,7 @@ enum {
     NJS_VMCODE_IF_FALSE_JUMP,
     NJS_VMCODE_IF_EQUAL_JUMP,
     NJS_VMCODE_PROPERTY_INIT,
+    NJS_VMCODE_ARRAY_INIT,
     NJS_VMCODE_RETURN,
     NJS_VMCODE_FUNCTION_FRAME,
     NJS_VMCODE_METHOD_FRAME,
@@ -175,6 +176,7 @@ typedef struct {
     njs_index_t                retval;
     uintptr_t                  length;
     uint8_t                    ctor;       /* 1 bit  */
+    uint8_t                    flat;       /* 1 bit  */
 } njs_vmcode_array_t;
 
 
@@ -249,6 +251,14 @@ typedef struct {
     njs_index_t                object;
     njs_index_t                property;
 } njs_vmcode_prop_set_t;
+
+
+typedef struct {
+    njs_vmcode_t               code;
+    uint32_t                   index;
+    njs_index_t                value;
+    njs_index_t                array;
+} njs_vmcode_array_init_t;
 
 
 typedef struct {

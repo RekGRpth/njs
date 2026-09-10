@@ -263,14 +263,15 @@ typedef struct {
     njs_str_t                       file;
 
     njs_vm_t                        *vm;
+    njs_mp_t                        *mem_pool;
 
     u_char                          *start;
     u_char                          *end;
 } njs_lexer_t;
 
 
-njs_int_t njs_lexer_init(njs_vm_t *vm, njs_lexer_t *lexer, njs_str_t *file,
-    u_char *start, u_char *end);
+njs_int_t njs_lexer_init(njs_vm_t *vm, njs_mp_t *mem_pool,
+    njs_lexer_t *lexer, njs_str_t *file, u_char *start, u_char *end);
 
 njs_lexer_token_t *njs_lexer_token(njs_lexer_t *lexer,
     njs_bool_t with_end_line);

@@ -136,10 +136,11 @@ struct ngx_js_http_s {
     ngx_int_t                      buffer_size;
     ngx_int_t                      max_response_body_size;
 
-    unsigned                       header_only;
-
-    ngx_flag_t                     chunked;
-    ngx_flag_t                     keepalive;
+    unsigned                       header_only:1;
+    unsigned                       content_length:1;
+    unsigned                       chunked:1;
+    unsigned                       keepalive:1;
+    unsigned                       body:3;
     off_t                          content_length_n;
 
 #if (NGX_SSL)

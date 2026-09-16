@@ -64,6 +64,10 @@ http {
             js_content test.broken_catch;
         }
 
+        location /body_size {
+            js_content test.body_size;
+        }
+
         location /body {
             js_content test.body;
         }
@@ -86,6 +90,10 @@ http {
 
         location /chunked_fail {
             js_content test.chunked_fail;
+        }
+
+        location /framing {
+            js_content test.framing;
         }
 
         location /header {
@@ -273,6 +281,19 @@ $t->write_file('test.js', <<EOF);
         return process_errors_catch(r, tests);
     }
 
+    async function body_size(r) {
+        try {
+            let reply = await ngx.fetch(
+                'http://127.0.0.1:$p2/no_content_length',
+                {max_response_body_size: -1});
+            let body = await reply.text();
+            r.return(200, `ok:\${body.length}`);
+
+        } catch (e) {
+            r.return(501, e.message);
+        }
+    }
+
     function chain(r) {
         var results = [];
         var reqs = [
@@ -338,6 +359,20 @@ $t->write_file('test.js', <<EOF);
             .then(reply => reply.text())
             .catch(e => collect(e.message))
         })
+    }
+
+    async function framing(r) {
+        var opts = {max_response_body_size: 128};
+
+        try {
+            var reply = await ngx.fetch(`http://127.0.0.1:$p2/\${r.args.loc}`,
+                                        opts);
+            var body = await reply.text();
+            r.return(200, `ok:\${body.length}`);
+
+        } catch (e) {
+            r.return(501, e.message);
+        }
     }
 
     function header(r) {
@@ -467,15 +502,16 @@ $t->write_file('test.js', <<EOF);
         r.return(c, `\${v.request_method}:\${bar}:\${body}`);
     }
 
-     export default {njs: test_njs, body, broken, broken_response, broken_catch,
-                     body_special,chain, chunked_ok, chunked_fail, header,
-                     header_iter, host_header, multi, loc, property,
-                     body_content_length, user_agent_header };
+    export default {njs: test_njs, body, body_size, broken, broken_response,
+                    broken_catch, body_special, chain, chunked_ok,
+                    chunked_fail, framing, header, header_iter, host_header,
+                    multi, loc, property, body_content_length,
+                    user_agent_header };
 EOF
 
 $t->try_run('no njs.fetch');
 
-$t->plan(45);
+$t->plan(58);
 
 $t->run_daemon(\&http_daemon, port(8082));
 $t->waitforsocket('127.0.0.1:' . port(8082));
@@ -544,10 +580,43 @@ like(http_get('/broken'), qr/200/s, 'fetch broken');
 like(http_get('/broken_response'), qr/200/s, 'fetch broken response');
 like(http_get('/broken_catch'), qr/\["async","async","async"]$/s,
         'fetch broken catch');
+like(http_get('/body_size'),
+	qr/501.*max_response_body_size must be non-negative/s,
+	'fetch negative response body size');
 like(http_get('/chunked_ok'), qr/200/s, 'fetch chunked ok');
 like(http_get('/chunked_fail'), qr/200/s, 'fetch chunked fail');
 like(http_get('/chain'), qr/200 OK.*SUCCESS$/s, 'fetch chain');
 
+like(http_get('/framing?loc=content_length_conflict'),
+	qr/501.*conflicting http content length/s,
+	'fetch conflicting content-length');
+like(http_get('/framing?loc=content_length_same'), qr/200 OK.*ok:5$/s,
+	'fetch identical content-length');
+like(http_get('/framing?loc=transfer_content_length'),
+	qr/501.*conflicting http response framing/s,
+	'fetch transfer and content length');
+like(http_get('/body_special?loc=no_body/204'), qr/200 OK.*<empty>$/s,
+	'fetch 204 response body');
+like(http_get('/body_special?loc=no_body/304'), qr/200 OK.*<empty>$/s,
+	'fetch 304 response body');
+like(http_get('/framing?loc=continue'),
+	qr/501.*unsupported http response status/s,
+	'fetch interim response unsupported');
+like(http_get('/framing?loc=no_body/304_large'), qr/200 OK.*ok:0$/s,
+	'fetch 304 response large content length');
+like(http_get('/framing?loc=length'),
+	qr/501.*prematurely closed connection/s,
+	'fetch incomplete fixed-length response');
+like(http_get('/framing?loc=chunked/exact'), qr/200 OK.*ok:128$/s,
+	'fetch chunked exact limit');
+like(http_get('/framing?loc=chunked/over'),
+	qr/501.*http response body is too large/s,
+	'fetch chunked response too large');
+like(http_get('/framing?loc=chunked/multi'), qr/200 OK.*ok:128$/s,
+	'fetch chunked multi-part limit');
+like(http_get('/framing?loc=chunked/multi_over'),
+	qr/501.*http response body is too large/s,
+	'fetch chunked multi-part response too large');
 like(http_get('/header_iter?loc=duplicate_header_large'),
 	qr/\["A:a","B:a","C:a","D:a","E:a","F:a","G:a","H:a","Moo:a, ?b"]$/s,
 	'fetch header duplicate large');
@@ -691,6 +760,36 @@ sub http_daemon {
 				"Connection: close" . CRLF .
 				CRLF;
 
+		} elsif ($uri eq '/continue') {
+			print $client
+				"HTTP/1.1 100 Continue" . CRLF .
+				"Content-Length: 0" . CRLF .
+				CRLF;
+
+		} elsif ($uri eq '/content_length_conflict') {
+			print $client
+				"HTTP/1.1 200 OK" . CRLF .
+				"Content-Length: 4" . CRLF .
+				"content-length: 5" . CRLF .
+				"Connection: close" . CRLF .
+				CRLF . "12345";
+
+		} elsif ($uri eq '/content_length_same') {
+			print $client
+				"HTTP/1.1 200 OK" . CRLF .
+				"Content-Length: 5" . CRLF .
+				"content-length: 5" . CRLF .
+				"Connection: close" . CRLF .
+				CRLF . "12345";
+
+		} elsif ($uri eq '/transfer_content_length') {
+			print $client
+				"HTTP/1.1 200 OK" . CRLF .
+				"Transfer-Encoding: chunked" . CRLF .
+				"Content-Length: 5" . CRLF .
+				"Connection: close" . CRLF .
+				CRLF . "5" . CRLF . "12345" . CRLF . "0" . CRLF . CRLF;
+
 		} elsif ($uri eq '/header') {
 			print $client
 				"HTTP/1.1 200 OK" . CRLF .
@@ -755,6 +854,17 @@ sub http_daemon {
 			print $client
 				"HTTP/1.1 200 OK" . CRLF .
 				"Content-Length: 1000000" . CRLF .
+				"Connection: close" . CRLF .
+				CRLF;
+
+		} elsif ($uri eq '/no_body/204' || $uri eq '/no_body/304'
+			|| $uri eq '/no_body/304_large')
+		{
+			my $code = ($uri eq '/no_body/204') ? 204 : 304;
+			my $length = ($uri eq '/no_body/304_large') ? 1000000 : 5;
+			print $client
+				"HTTP/1.1 $code No Content" . CRLF .
+				"Content-Length: $length" . CRLF .
 				"Connection: close" . CRLF .
 				CRLF;
 
@@ -841,6 +951,27 @@ sub http_daemon {
 			}
 
 		    print $client  "0" . CRLF . CRLF;
+
+		} elsif ($uri =~ m#^/chunked/(exact|over)$#) {
+			my $size = ($1 eq 'exact') ? 128 : 129;
+			print $client
+				"HTTP/1.1 200 OK" . CRLF .
+				"Transfer-Encoding: chunked" . CRLF .
+				"Connection: close" . CRLF .
+				CRLF . sprintf("%x", $size) . CRLF . ("X" x $size)
+				. CRLF . "0" . CRLF . CRLF;
+
+		} elsif ($uri =~ m#^/chunked/(multi|multi_over)$#) {
+			my $last = ($1 eq 'multi') ? 64 : 65;
+			print $client
+				"HTTP/1.1 200 OK" . CRLF .
+				"Transfer-Encoding: chunked" . CRLF .
+				"Connection: close" . CRLF .
+				CRLF . "40" . CRLF . ("X" x 64) . CRLF;
+			select undef, undef, undef, 0.01;
+			print $client sprintf("%x", $last) . CRLF . ("X" x $last)
+				. CRLF . "0" . CRLF . CRLF;
+
 		}
 	}
 }

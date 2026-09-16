@@ -79,6 +79,11 @@ http {
             js_content test.keepalive;
         }
 
+        location /keepalive_head {
+            js_fetch_keepalive 4;
+            js_content test.keepalive_head;
+        }
+
         location /no_keepalive {
             js_fetch_keepalive 0;
             js_content test.keepalive;
@@ -158,7 +163,21 @@ $t->write_file('test.js', <<EOF);
         r.return(200, JSON.stringify(responses));
     }
 
-    export default {engine, keepalive, keepalive_simultaneous};
+    async function keepalive_head(r) {
+        const loc = r.args.loc || 'count';
+        const port = r.args.port || $p1;
+        let responses = [];
+
+        for (let i = 0; i < 3; i++) {
+            let reply = await ngx.fetch(`http://127.0.0.1:\${port}/\${loc}`,
+                                        {method: 'HEAD'});
+            responses.push(reply.headers.get('Connection-ID'));
+        }
+
+        r.return(200, responses.toString());
+    }
+
+    export default {engine, keepalive, keepalive_head, keepalive_simultaneous};
 EOF
 
 $t->try_run('no js_fetch_keepalive');
@@ -166,7 +185,7 @@ $t->try_run('no js_fetch_keepalive');
 $t->run_daemon(\&http_daemon, $p2);
 $t->waitforsocket('127.0.0.1:' . $p2);
 
-$t->plan(16);
+$t->plan(20);
 
 ###############################################################################
 
@@ -180,6 +199,8 @@ like(http_get('/keepalive?path=count'), qr/1,2,3/,
 	'keepalive reuses connection');
 like(http_get('/keepalive?path=count'), qr/4,5,6/,
 	'keepalive reuses connection across requests');
+like(http_get('/keepalive_head'), qr/1,2,3/,
+	'keepalive reuses head response connection');
 like(http_get('/keepalive_simultaneous?n=8'), qr/1,1,1,1,1,1,1,1/,
 	'keepalive simultaneous requests');
 like(http_get('/keepalive_simultaneous?n=8'), qr/2,2,2,2,1,1,1,1/,
@@ -211,6 +232,26 @@ like(http_get("/keepalive?path=count&port=$p2&sleep=1"), qr/1,2,3/,
 	'normal keepalive');
 like(http_get("/keepalive?path=assumed_keepalive&port=$p2&sleep=1"), qr/4,5,6/,
 	'assumed keepalive');
+my $r = http_get("/keepalive?path=trailing&port=$p2");
+my ($connections) = $r =~ /(\d+,\d+,\d+)\s*$/;
+my @connections = split /,/, ($connections // '');
+my %seen;
+$seen{$_} = 1 for @connections;
+is(scalar(keys %seen), 3, 'upstream trailing response data');
+
+$r = http_get("/keepalive_head?loc=trailing_head&port=$p2");
+($connections) = $r =~ /(\d+,\d+,\d+)\s*$/;
+@connections = split /,/, ($connections // '');
+%seen = ();
+$seen{$_} = 1 for @connections;
+is(scalar(keys %seen), 3, 'upstream trailing head response data');
+
+$r = http_get("/keepalive?path=trailing_chunked&port=$p2");
+($connections) = $r =~ /(\d+,\d+,\d+)\s*$/;
+@connections = split /,/, ($connections // '');
+%seen = ();
+$seen{$_} = 1 for @connections;
+is(scalar(keys %seen), 3, 'upstream trailing chunked response data');
 
 ###############################################################################
 
@@ -279,6 +320,29 @@ sub http_daemon {
 					"HTTP/1.0 200 OK" . CRLF .
 					"Content-Length: " . length($body) . CRLF . CRLF .
 					$body;
+
+			} elsif ($uri eq '/trailing') {
+				print $client
+					"HTTP/1.1 200 OK" . CRLF .
+					"Content-Length: " . length($ccount) . CRLF .
+					"Connection: keep-alive" . CRLF . CRLF .
+					$ccount . "trailing";
+
+			} elsif ($uri eq '/trailing_head') {
+				print $client
+					"HTTP/1.1 200 OK" . CRLF .
+					"Content-Length: " . length($ccount) . CRLF .
+					"Connection-ID: $ccount" . CRLF .
+					"Connection: keep-alive" . CRLF . CRLF .
+					$ccount . "trailing";
+
+			} elsif ($uri eq '/trailing_chunked') {
+				print $client
+					"HTTP/1.1 200 OK" . CRLF .
+					"Transfer-Encoding: chunked" . CRLF .
+					"Connection: keep-alive" . CRLF . CRLF .
+					length($ccount) . CRLF . $ccount . CRLF .
+					"0" . CRLF . CRLF . "trailing";
 			}
 		}
 

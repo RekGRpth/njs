@@ -44,7 +44,8 @@ typedef struct {
     /* Number of free chunks of a chunked page. */
     uint8_t                     chunks;
 
-    uint8_t                     _unused;
+    /* Index of the pool slot the chunks of the page belong to. */
+    uint8_t                     slot;
 
     /* Chunk bitmap.  There can be no more than 32 chunks in a page. */
     uint8_t                     map[4];
@@ -70,6 +71,8 @@ typedef enum {
 typedef struct {
     NJS_RBTREE_NODE             (node);
     njs_mp_block_type_t         type:8;
+
+    uint16_t                    free_pages;
 
     /* Block size must be less than 4G. */
     uint32_t                    size;
@@ -102,6 +105,7 @@ struct njs_mp_s {
 
     uint8_t                     chunk_size_shift;
     uint8_t                     page_size_shift;
+    uint16_t                    pages_per_cluster;
     uint32_t                    page_size;
     uint32_t                    page_alignment;
     uint32_t                    cluster_size;
@@ -120,8 +124,14 @@ struct njs_mp_s {
     map[chunk / 8] &= ~(0x80 >> (chunk & 7))
 
 
+#if (NJS_DEBUG)
 #define njs_mp_free_junk(p, size)                                             \
     njs_memset((p), 0x5A, size)
+
+#else
+#define njs_mp_free_junk(p, size)
+
+#endif
 
 
 #define njs_is_power_of_two(value)                                            \
@@ -213,6 +223,7 @@ njs_mp_fast_create(size_t cluster_size, size_t page_alignment, size_t page_size,
 
         mp->chunk_size_shift = njs_mp_shift(min_chunk_size);
         mp->page_size_shift = njs_mp_shift(page_size);
+        mp->pages_per_cluster = cluster_size >> mp->page_size_shift;
 
         njs_rbtree_init(&mp->blocks, njs_mp_rbtree_compare);
 
@@ -386,16 +397,20 @@ njs_mp_zalign(njs_mp_t *mp, size_t alignment, size_t size)
 
 #if !(NJS_DEBUG_MEMORY)
 
+njs_inline njs_mp_block_t *
+njs_mp_page_cluster(njs_mp_page_t *page)
+{
+    return (njs_mp_block_t *)
+               ((u_char *) page - page->number * sizeof(njs_mp_page_t)
+                - offsetof(njs_mp_block_t, pages));
+}
+
+
 njs_inline u_char *
 njs_mp_page_addr(njs_mp_t *mp, njs_mp_page_t *page)
 {
-    njs_mp_block_t  *block;
-
-    block = (njs_mp_block_t *)
-                ((u_char *) page - page->number * sizeof(njs_mp_page_t)
-                 - offsetof(njs_mp_block_t, pages));
-
-    return block->start + (page->number << mp->page_size_shift);
+    return njs_mp_page_cluster(page)->start
+           + (page->number << mp->page_size_shift);
 }
 
 
@@ -450,6 +465,7 @@ njs_mp_alloc_small(njs_mp_t *mp, size_t size)
                 /* slot->chunks are already one less. */
                 page->chunks = slot->chunks;
                 page->size = size >> mp->chunk_size_shift;
+                page->slot = slot - mp->slots;
 
                 p = njs_mp_page_addr(mp, page);
             }
@@ -532,6 +548,8 @@ njs_mp_alloc_page(njs_mp_t *mp)
 
     page = njs_queue_link_data(link, njs_mp_page_t, link);
 
+    njs_mp_page_cluster(page)->free_pages--;
+
     return page;
 }
 
@@ -542,7 +560,7 @@ njs_mp_alloc_cluster(njs_mp_t *mp)
     njs_uint_t      n;
     njs_mp_block_t  *cluster;
 
-    n = mp->cluster_size >> mp->page_size_shift;
+    n = mp->pages_per_cluster;
 
     cluster = njs_zalloc(sizeof(njs_mp_block_t) + n * sizeof(njs_mp_page_t));
 
@@ -553,6 +571,7 @@ njs_mp_alloc_cluster(njs_mp_t *mp)
     /* NJS_MP_CLUSTER_BLOCK type is zero. */
 
     cluster->size = mp->cluster_size;
+    cluster->free_pages = n;
 
     cluster->start = njs_memalign(mp->page_alignment, mp->cluster_size);
     if (njs_slow_path(cluster->start == NULL)) {
@@ -647,12 +666,16 @@ njs_mp_alloc_large(njs_mp_t *mp, size_t alignment, size_t size)
 static intptr_t
 njs_mp_rbtree_compare(njs_rbtree_node_t *node1, njs_rbtree_node_t *node2)
 {
+    uintptr_t        start1, start2;
     njs_mp_block_t  *block1, *block2;
 
     block1 = (njs_mp_block_t *) node1;
     block2 = (njs_mp_block_t *) node2;
 
-    return (uintptr_t) block1->start - (uintptr_t) block2->start;
+    start1 = (uintptr_t) block1->start;
+    start2 = (uintptr_t) block2->start;
+
+    return (start1 > start2) - (start1 < start2);
 }
 
 
@@ -791,8 +814,9 @@ njs_mp_chunk_free(njs_mp_t *mp, njs_mp_block_t *cluster,
 
         njs_mp_chunk_set_free(page->map, chunk);
 
-        /* Find a slot with appropriate chunk size. */
-        for (slot = mp->slots; slot->size < size; slot++) { /* void */ }
+        slot = &mp->slots[page->slot];
+
+        njs_assert(slot->size == size);
 
         if (page->chunks != slot->chunks) {
             page->chunks++;
@@ -830,22 +854,16 @@ njs_mp_chunk_free(njs_mp_t *mp, njs_mp_block_t *cluster,
 
     /* Test if all pages in the cluster are free. */
 
-    page = cluster->pages;
-    n = mp->cluster_size >> mp->page_size_shift;
+    cluster->free_pages++;
 
-    do {
-         if (page->size != 0) {
-             return NULL;
-         }
-
-         page++;
-         n--;
-    } while (n != 0);
+    if (cluster->free_pages != mp->pages_per_cluster) {
+        return NULL;
+    }
 
     /* Free cluster. */
 
     page = cluster->pages;
-    n = mp->cluster_size >> mp->page_size_shift;
+    n = mp->pages_per_cluster;
 
     do {
          njs_queue_remove(&page->link);

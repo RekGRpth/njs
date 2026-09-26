@@ -5,6 +5,7 @@
  */
 
 #include <qjs.h>
+#include <limits.h>
 #include <zlib.h>
 
 #define NJS_ZLIB_CHUNK_SIZE  1024
@@ -68,7 +69,10 @@ static JSValue
 qjs_zlib_ext_deflate(JSContext *ctx, JSValueConst this_val, int argc,
     JSValueConst *argv, int raw)
 {
-    int          rc, chunk_size, level, mem_level, strategy, window_bits;
+    int          rc, level, mem_level, strategy, window_bits;
+    u_char       *dictionary_copy;
+    size_t       chunk_size, dictionary_length;
+    uint64_t     chunk_size_value;
     JSValue      ret, options;
     z_stream     stream;
     njs_chb_t    chain;
@@ -83,6 +87,8 @@ qjs_zlib_ext_deflate(JSContext *ctx, JSValueConst this_val, int argc,
     NJS_CHB_CTX_INIT(&chain, ctx);
     dictionary.start = NULL;
     dictionary.length = 0;
+    dictionary_copy = NULL;
+    dictionary_length = 0;
     stream.opaque = NULL;
 
     options = argv[1];
@@ -94,16 +100,18 @@ qjs_zlib_ext_deflate(JSContext *ctx, JSValueConst this_val, int argc,
         }
 
         if (!JS_IsUndefined(ret)) {
-            rc = JS_ToInt32(ctx, &chunk_size, ret);
+            rc = qjs_to_length(ctx, ret, &chunk_size_value);
             JS_FreeValue(ctx, ret);
             if (rc != 0) {
                 return JS_EXCEPTION;
             }
 
-            if (chunk_size < 64) {
+            if (chunk_size_value < 64 || chunk_size_value > UINT_MAX) {
                 JS_ThrowRangeError(ctx, "chunkSize must be >= 64");
                 return JS_EXCEPTION;
             }
+
+            chunk_size = chunk_size_value;
         }
 
         ret = JS_GetPropertyStr(ctx, options, "level");
@@ -208,11 +216,23 @@ qjs_zlib_ext_deflate(JSContext *ctx, JSValueConst this_val, int argc,
             if (rc != 0) {
                 return JS_EXCEPTION;
             }
+
+            dictionary_copy = js_malloc(ctx, dictionary.length);
+            if (dictionary_copy == NULL && dictionary.length != 0) {
+                qjs_bytes_free(ctx, &dictionary);
+                return JS_EXCEPTION;
+            }
+
+            memcpy(dictionary_copy, dictionary.start, dictionary.length);
+            dictionary_length = dictionary.length;
+            qjs_bytes_free(ctx, &dictionary);
+            dictionary.start = NULL;
         }
     }
 
     rc = qjs_to_bytes(ctx, &bytes, argv[0]);
     if (rc != 0) {
+        js_free(ctx, dictionary_copy);
         return JS_EXCEPTION;
     }
 
@@ -230,8 +250,8 @@ qjs_zlib_ext_deflate(JSContext *ctx, JSValueConst this_val, int argc,
         goto fail;
     }
 
-    if (dictionary.start != NULL) {
-        rc = deflateSetDictionary(&stream, dictionary.start, dictionary.length);
+    if (dictionary_copy != NULL) {
+        rc = deflateSetDictionary(&stream, dictionary_copy, dictionary_length);
         if (rc != Z_OK) {
             JS_ThrowInternalError(ctx, "deflateSetDictionary() failed");
             goto fail;
@@ -262,9 +282,7 @@ qjs_zlib_ext_deflate(JSContext *ctx, JSValueConst this_val, int argc,
 
     qjs_bytes_free(ctx, &bytes);
 
-    if (dictionary.start != NULL) {
-        qjs_bytes_free(ctx, &dictionary);
-    }
+    js_free(ctx, dictionary_copy);
 
     ret = qjs_buffer_chb_alloc(ctx, &chain);
 
@@ -276,9 +294,7 @@ fail:
 
     qjs_bytes_free(ctx, &bytes);
 
-    if (dictionary.start != NULL) {
-        qjs_bytes_free(ctx, &dictionary);
-    }
+    js_free(ctx, dictionary_copy);
 
     if (stream.opaque != NULL) {
         deflateEnd(&stream);
@@ -296,7 +312,10 @@ static JSValue
 qjs_zlib_ext_inflate(JSContext *ctx, JSValueConst this_val, int argc,
     JSValueConst *argv, int raw)
 {
-    int          rc, chunk_size, window_bits;
+    int          rc, window_bits;
+    u_char       *dictionary_copy;
+    size_t       chunk_size, dictionary_length;
+    uint64_t     chunk_size_value;
     JSValue      ret, options;
     z_stream     stream;
     njs_chb_t    chain;
@@ -308,6 +327,8 @@ qjs_zlib_ext_inflate(JSContext *ctx, JSValueConst this_val, int argc,
     NJS_CHB_CTX_INIT(&chain, ctx);
     dictionary.start = NULL;
     dictionary.length = 0;
+    dictionary_copy = NULL;
+    dictionary_length = 0;
     stream.opaque = NULL;
 
     options = argv[1];
@@ -319,16 +340,18 @@ qjs_zlib_ext_inflate(JSContext *ctx, JSValueConst this_val, int argc,
         }
 
         if (!JS_IsUndefined(ret)) {
-            rc = JS_ToInt32(ctx, &chunk_size, ret);
+            rc = qjs_to_length(ctx, ret, &chunk_size_value);
             JS_FreeValue(ctx, ret);
             if (rc != 0) {
                 return JS_EXCEPTION;
             }
 
-            if (chunk_size < 64) {
+            if (chunk_size_value < 64 || chunk_size_value > UINT_MAX) {
                 JS_ThrowRangeError(ctx, "chunkSize must be >= 64");
                 return JS_EXCEPTION;
             }
+
+            chunk_size = chunk_size_value;
         }
 
         ret = JS_GetPropertyStr(ctx, options, "windowBits");
@@ -370,11 +393,23 @@ qjs_zlib_ext_inflate(JSContext *ctx, JSValueConst this_val, int argc,
             if (rc != 0) {
                 return JS_EXCEPTION;
             }
+
+            dictionary_copy = js_malloc(ctx, dictionary.length);
+            if (dictionary_copy == NULL && dictionary.length != 0) {
+                qjs_bytes_free(ctx, &dictionary);
+                return JS_EXCEPTION;
+            }
+
+            memcpy(dictionary_copy, dictionary.start, dictionary.length);
+            dictionary_length = dictionary.length;
+            qjs_bytes_free(ctx, &dictionary);
+            dictionary.start = NULL;
         }
     }
 
     rc = qjs_to_bytes(ctx, &bytes, argv[0]);
     if (rc != 0) {
+        js_free(ctx, dictionary_copy);
         return JS_EXCEPTION;
     }
 
@@ -391,8 +426,8 @@ qjs_zlib_ext_inflate(JSContext *ctx, JSValueConst this_val, int argc,
         goto fail;
     }
 
-    if (dictionary.start != NULL) {
-        rc = inflateSetDictionary(&stream, dictionary.start, dictionary.length);
+    if (dictionary_copy != NULL) {
+        rc = inflateSetDictionary(&stream, dictionary_copy, dictionary_length);
         if (rc != Z_OK) {
             JS_ThrowInternalError(ctx, "inflateSetDictionary() failed");
             goto fail;
@@ -431,9 +466,7 @@ qjs_zlib_ext_inflate(JSContext *ctx, JSValueConst this_val, int argc,
 
     qjs_bytes_free(ctx, &bytes);
 
-    if (dictionary.start != NULL) {
-        qjs_bytes_free(ctx, &dictionary);
-    }
+    js_free(ctx, dictionary_copy);
 
     ret = qjs_buffer_chb_alloc(ctx, &chain);
 
@@ -444,6 +477,8 @@ qjs_zlib_ext_inflate(JSContext *ctx, JSValueConst this_val, int argc,
 fail:
 
     qjs_bytes_free(ctx, &bytes);
+
+    js_free(ctx, dictionary_copy);
 
     if (dictionary.start != NULL) {
         qjs_bytes_free(ctx, &dictionary);

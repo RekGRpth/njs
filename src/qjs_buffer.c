@@ -125,7 +125,7 @@ static qjs_buffer_encoding_t  qjs_buffer_encodings[] =
 
 
 static const JSCFunctionListEntry qjs_buffer_constants[] = {
-    JS_PROP_INT32_DEF("MAX_LENGTH", INT32_MAX, JS_PROP_ENUMERABLE),
+    JS_PROP_INT32_DEF("MAX_LENGTH", QJS_BUFFER_MAX_LENGTH, JS_PROP_ENUMERABLE),
     JS_PROP_INT32_DEF("MAX_STRING_LENGTH", 0x3fffffff, JS_PROP_ENUMERABLE),
 };
 
@@ -347,14 +347,14 @@ qjs_bufferobj_alloc(JSContext *ctx, JSValueConst this_val, int argc,
     JSValueConst *argv, int ignored)
 {
     JSValue   buffer, ret;
-    uint32_t  size;
+    uint64_t  size;
 
     if (!JS_IsNumber(argv[0])) {
         return JS_ThrowTypeError(ctx, "The \"size\" argument must be of type"
                                  " number");
     }
 
-    if (JS_ToUint32(ctx, &size, argv[0])) {
+    if (JS_ToIndex(ctx, &size, argv[0])) {
         return JS_EXCEPTION;
     }
 
@@ -434,8 +434,9 @@ qjs_buffer_concat(JSContext *ctx, JSValueConst this_val, int argc,
 {
     u_char     *p;
     size_t     n;
+    uint64_t   len;
     JSValue    list, length, val, ret, buffer;
-    uint32_t   i, len, list_len;
+    uint32_t   i, list_len;
     njs_str_t  buf, dst;
 
     list = argv[0];
@@ -472,16 +473,16 @@ qjs_buffer_concat(JSContext *ctx, JSValueConst this_val, int argc,
                                         " instance of Buffer or Uint8Array", i);
             }
 
-            if ((SIZE_MAX - len) < buf.length) {
-                return JS_ThrowTypeError(ctx,
-                                         "Total size of buffers is too large");
+            if (buf.length > QJS_BUFFER_MAX_LENGTH - len) {
+                return JS_ThrowRangeError(ctx,
+                                          "Total size of buffers is too large");
             }
 
             len += buf.length;
         }
 
     } else {
-        if (JS_ToUint32(ctx, &len, argv[1])) {
+        if (JS_ToIndex(ctx, &len, argv[1])) {
             return JS_EXCEPTION;
         }
     }
@@ -1889,6 +1890,9 @@ qjs_buffer_from_string(JSContext *ctx, JSValueConst str,
     }
 
     src.start = (u_char *) JS_ToCStringLen(ctx, &src.length, str);
+    if (src.start == NULL) {
+        return JS_EXCEPTION;
+    }
 
     if (encoding->decode_length != NULL) {
         size = encoding->decode_length(ctx, &src);
@@ -1906,12 +1910,14 @@ qjs_buffer_from_string(JSContext *ctx, JSValueConst str,
     ret = qjs_typed_array_data(ctx, buffer, &dst);
     if (JS_IsException(ret)) {
         JS_FreeCString(ctx, (char *) src.start);
+        JS_FreeValue(ctx, buffer);
         return ret;
     }
 
     if (encoding->decode != NULL) {
         if (encoding->decode(ctx, &src, &dst) != 0) {
             JS_FreeCString(ctx, (char *) src.start);
+            JS_FreeValue(ctx, buffer);
             JS_ThrowTypeError(ctx, "failed to decode string");
             return JS_EXCEPTION;
         }
@@ -2018,7 +2024,7 @@ qjs_buffer_from_object(JSContext *ctx, JSValueConst obj)
 {
     int         v;
     u_char      *p;
-    int64_t     i, len;
+    uint64_t    i, len;
     JSValue     buffer, ret;
     njs_str_t   dst;
     const char  *str;
@@ -2068,7 +2074,12 @@ reject:
         return JS_EXCEPTION;
     }
 
-    len = JS_VALUE_GET_INT(ret);
+    if (qjs_to_length(ctx, ret, &len)) {
+        JS_FreeValue(ctx, ret);
+        return JS_EXCEPTION;
+    }
+
+    JS_FreeValue(ctx, ret);
 
     buffer = qjs_buffer_alloc(ctx, len);
     if (JS_IsException(buffer)) {
@@ -2570,9 +2581,13 @@ qjs_hex_encode_length(JSContext *ctx, const njs_str_t *src)
 
 
 JSValue
-qjs_buffer_alloc(JSContext *ctx, size_t size)
+qjs_buffer_alloc(JSContext *ctx, uint64_t size)
 {
     JSValue  ret, proto, value;
+
+    if (size > QJS_BUFFER_MAX_LENGTH) {
+        return JS_ThrowRangeError(ctx, "invalid array buffer length");
+    }
 
     value = JS_NewInt64(ctx, size);
 
@@ -2603,6 +2618,7 @@ qjs_buffer_create(JSContext *ctx, u_char *start, size_t size)
 
     ret = qjs_typed_array_data(ctx, buffer, &dst);
     if (JS_IsException(ret)) {
+        JS_FreeValue(ctx, buffer);
         return ret;
     }
 

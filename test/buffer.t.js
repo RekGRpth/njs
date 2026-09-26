@@ -1,5 +1,5 @@
 /*---
-includes: [compatBuffer.js, runTsuite.js, compareArray.js]
+includes: [compatBuffer.js, compatNjs.js, runTsuite.js, compareArray.js]
 flags: [async]
 ---*/
 
@@ -32,6 +32,66 @@ let alloc_tsuite = {
           exception: 'TypeError: "utf-128" encoding is not supported' },
         { size: 3, fill: Buffer.from('def'), expected: 'def' },
     ],
+};
+
+
+let oversized_tsuite = {
+    name: "Buffer allocation size tests",
+    skip: () => (!has_buffer() || !has_njs()),
+    T: async (params) => {
+        assert.throws(RangeError, () => {
+            if (params.method === 'alloc') {
+                Buffer.alloc(params.size);
+
+            } else {
+                Buffer.concat([], params.size);
+            }
+        });
+
+        return 'SUCCESS';
+    },
+    tests: [
+        { method: 'alloc', size: 0x100000000 },
+        { method: 'alloc', size: 0x100000010 },
+        { method: 'concat', size: 0x100000000 },
+        { method: 'concat', size: 0x100000010 },
+    ],
+};
+
+
+let fromObject_tsuite = {
+    name: "Buffer.from() array-like length tests",
+    skip: () => (!has_buffer()),
+    T: async (params) => {
+        let buffer = Buffer.from(params.value);
+
+        if (buffer.toString() !== params.expected) {
+            throw Error(`unexpected output "${buffer.toString()}"`);
+        }
+
+        return 'SUCCESS';
+    },
+
+    tests: [
+        { value: { length: 1.5, 0: 0x41 }, expected: 'A' },
+        { value: { length: -1, 0: 0x41 }, expected: '' },
+        { value: { length: NaN, 0: 0x41 }, expected: '' },
+    ],
+};
+
+
+let fromObjectLarge_tsuite = {
+    name: "Buffer.from() oversized array-like length tests",
+    skip: () => (!has_buffer() || !has_njs()),
+    T: async () => {
+        assert.throws(RangeError, () => Buffer.from({
+            length: 0x100000010,
+            get 0() { throw Error('unexpected index access'); },
+        }));
+
+        return 'SUCCESS';
+    },
+    tests: [{}],
 };
 
 
@@ -132,7 +192,7 @@ let concatRevalidate_tsuite = {
             Buffer.concat(list);
 
         } catch (e) {
-            if (e instanceof TypeError) {
+            if (e instanceof TypeError || e instanceof RangeError) {
                 return 'SUCCESS';
             }
 
@@ -340,8 +400,10 @@ let fill_tsuite = {
         { buf: Buffer.from('abc'), value: Buffer.from('def'), expected: 'def' },
         { buf: Buffer.from('abc'), value: Buffer.from('def'), detach_value: true,
           exception: 'TypeError: detached buffer' },
-        { buf: Buffer.from('abc'), value: Buffer.from(''), expected: '\0\0\0' },
-        { buf: Buffer.from('abc'), value_from_buf: [1, 1], expected: '\0\0\0' },
+        { buf: Buffer.from('abc'), value: Buffer.from(''),
+          exception: 'TypeError: value argument must not be empty' },
+        { buf: Buffer.from('abc'), value_from_buf: [1, 1],
+          exception: 'TypeError: value argument must not be empty' },
         { buf: Buffer.from('def'),
           value: Buffer.from(new Uint8Array([0x60, 0x61, 0x62, 0x63]).buffer, 1),
           expected: 'abc' },
@@ -409,8 +471,6 @@ let from_tsuite = {
         { args: [{length:3, 0:0x62, 1:0x75, 2:0x66}], expected: 'buf' },
         { args: [[-1, 1, 255, 22323, -Infinity, Infinity, NaN]], fmt: "hex", expected: 'ff01ff33000000' },
         { args: [{length:5, 0:'A'.charCodeAt(0), 2:'X', 3:NaN, 4:0xfd}], fmt: "hex", expected: '41000000fd' },
-        { args: [{length: 0x100000000}], exception: 'RangeError: invalid index' },
-        { args: [{length: 0x100000001}], exception: 'RangeError: invalid index' },
         { args: [[1, 2, 0.23, '5', 'A']], fmt: "hex", expected: '0102000500' },
         { args: [new Uint8Array([0xff, 0xde, 0xba])], fmt: "hex", expected: 'ffdeba' },
 
@@ -1122,6 +1182,9 @@ let writeGeneric_tsuite = {
 
 run([
     alloc_tsuite,
+    oversized_tsuite,
+    fromObject_tsuite,
+    fromObjectLarge_tsuite,
     byteLength_tsuite,
     concat_tsuite,
     concatRevalidate_tsuite,

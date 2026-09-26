@@ -1331,7 +1331,8 @@ njs_cipher_aes_ctr(njs_vm_t *vm, njs_str_t *data, njs_webcrypto_key_t *key,
     blocks = BN_new();
     if (njs_slow_path(blocks == NULL)) {
         njs_webcrypto_error(vm, "BN_new() failed");
-        return NJS_ERROR;
+        ret = NJS_ERROR;
+        goto fail;
     }
 
     ret = BN_set_word(blocks, njs_ceil_div(data->length, AES_BLOCK_SIZE));
@@ -1351,7 +1352,8 @@ njs_cipher_aes_ctr(njs_vm_t *vm, njs_str_t *data, njs_webcrypto_key_t *key,
     left = BN_new();
     if (njs_slow_path(left == NULL)) {
         njs_webcrypto_error(vm, "BN_new() failed");
-        return NJS_ERROR;
+        ret = NJS_ERROR;
+        goto fail;
     }
 
     ret = BN_sub(left, total, ctr);
@@ -1365,7 +1367,8 @@ njs_cipher_aes_ctr(njs_vm_t *vm, njs_str_t *data, njs_webcrypto_key_t *key,
                        data->length + EVP_MAX_BLOCK_LENGTH);
     if (njs_slow_path(dst == NULL)) {
         njs_vm_memory_error(vm);
-        return NJS_ERROR;
+        ret = NJS_ERROR;
+        goto fail;
     }
 
     ret = BN_cmp(left, blocks);
@@ -3584,14 +3587,17 @@ fail0:
     curve = 0;
 
     val = njs_vm_object_prop(vm, jwk, &string_crv, &value);
-    if (val != NULL && !njs_value_is_undefined(val)) {
-        njs_value_string_get(vm, val, &name);
+    if (val == NULL || !njs_value_is_string(val)) {
+        njs_vm_type_error(vm, "Invalid JWK EC key");
+        return NULL;
+    }
 
-        for (e = &njs_webcrypto_curve[0]; e->name.length != 0; e++) {
-            if (njs_strstr_eq(&name, &e->name)) {
-                curve = e->value;
-                break;
-            }
+    njs_value_string_get(vm, val, &name);
+
+    for (e = &njs_webcrypto_curve[0]; e->name.length != 0; e++) {
+        if (njs_strstr_eq(&name, &e->name)) {
+            curve = e->value;
+            break;
         }
     }
 
@@ -4550,25 +4556,20 @@ njs_convert_p1363_to_der(njs_vm_t *vm, EVP_PKEY *pkey, u_char *p1363,
         goto memory_error;
     }
 
-    r = BN_new();
+    r = BN_bin2bn(p1363, n, NULL);
     if (njs_slow_path(r == NULL)) {
         goto memory_error;
     }
 
-    s = BN_new();
+    s = BN_bin2bn(&p1363[n], n, NULL);
     if (njs_slow_path(s == NULL)) {
+        BN_free(r);
         goto memory_error;
     }
 
-    if (r != BN_bin2bn(p1363, n, r)) {
-        goto fail;
-    }
-
-    if (s != BN_bin2bn(&p1363[n], n, s)) {
-        goto fail;
-    }
-
     if (njs_ecdsa_sig_set0(ec_sig, r, s) != 1) {
+        BN_free(r);
+        BN_free(s);
         njs_webcrypto_error(vm, "njs_ecdsa_sig_set0() failed");
         ret = NJS_ERROR;
         goto fail;
@@ -4583,6 +4584,8 @@ njs_convert_p1363_to_der(njs_vm_t *vm, EVP_PKEY *pkey, u_char *p1363,
     len = i2d_ECDSA_SIG(ec_sig, &data);
 
     if (len < 0) {
+        njs_webcrypto_error(vm, "i2d_ECDSA_SIG() failed");
+        ret = NJS_ERROR;
         goto fail;
     }
 
@@ -4605,8 +4608,9 @@ done:
 memory_error:
 
     njs_vm_memory_error(vm);
+    ret = NJS_ERROR;
 
-    return NJS_ERROR;
+    goto fail;
 }
 
 
@@ -4784,7 +4788,8 @@ njs_ext_sign(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
         }
 
         if (verify) {
-            ret = (sig.length == outlen && memcmp(sig.start, dst, outlen) == 0);
+            ret = (sig.length == outlen
+                   && CRYPTO_memcmp(sig.start, dst, outlen) == 0);
         }
 
         break;

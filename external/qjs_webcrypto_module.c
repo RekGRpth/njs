@@ -1111,7 +1111,8 @@ qjs_cipher_aes_ctr(JSContext *cx, njs_str_t *data, qjs_webcrypto_key_t *key,
     blocks = BN_new();
     if (blocks == NULL) {
         qjs_webcrypto_error(cx, "BN_new() failed");
-        return JS_EXCEPTION;
+        ret = JS_EXCEPTION;
+        goto fail;
     }
 
     if (BN_set_word(blocks, qjs_ceiling_div(data->length, AES_BLOCK_SIZE))
@@ -1131,7 +1132,8 @@ qjs_cipher_aes_ctr(JSContext *cx, njs_str_t *data, qjs_webcrypto_key_t *key,
     left = BN_new();
     if (left == NULL) {
         qjs_webcrypto_error(cx, "BN_new() failed");
-        return JS_EXCEPTION;
+        ret = JS_EXCEPTION;
+        goto fail;
     }
 
     if (BN_sub(left, total, ctr) != 1) {
@@ -4758,7 +4760,8 @@ qjs_webcrypto_sign(JSContext *cx, JSValueConst this_val, int argc,
         }
 
         if (verify) {
-            rc = (sig.length == outlen && memcmp(sig.start, dst, outlen) == 0);
+            rc = (sig.length == outlen
+                  && CRYPTO_memcmp(sig.start, dst, outlen) == 0);
         }
 
         break;

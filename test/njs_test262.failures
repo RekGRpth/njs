@@ -381,7 +381,6 @@ built-ins/Promise/all/invoke-resolve-error-close.js	strict
 built-ins/Promise/all/invoke-resolve-error-reject.js	strict
 built-ins/Promise/all/invoke-resolve-get-error-reject.js	strict
 built-ins/Promise/all/invoke-resolve-get-error.js	strict
-built-ins/Promise/all/invoke-resolve-get-once-multiple-calls.js	strict
 built-ins/Promise/all/invoke-resolve-on-promises-every-iteration-of-promise.js	strict
 built-ins/Promise/all/invoke-resolve-on-values-every-iteration-of-promise.js	strict
 built-ins/Promise/all/invoke-then-error-close.js	strict
@@ -457,8 +456,6 @@ built-ins/Promise/allSettled/resolve-non-callable.js	strict
 built-ins/Promise/allSettled/resolve-not-callable-reject-with-typeerror.js	strict
 built-ins/Promise/allSettled/resolve-throws-iterator-return-is-not-callable.js	strict
 built-ins/Promise/allSettled/resolve-throws-iterator-return-null-or-undefined.js	strict
-built-ins/Promise/any/call-reject-element-after-return.js	strict
-built-ins/Promise/any/call-reject-element-items.js	strict
 built-ins/Promise/any/capability-reject-throws-no-close.js	strict
 built-ins/Promise/any/capability-resolve-throws-no-close.js	strict
 built-ins/Promise/any/capability-resolve-throws-reject.js	strict
@@ -472,8 +469,6 @@ built-ins/Promise/any/invoke-resolve.js	strict
 built-ins/Promise/any/invoke-then-error-reject.js	strict
 built-ins/Promise/any/invoke-then-get-error-reject.js	strict
 built-ins/Promise/any/invoke-then-on-promises-every-iteration.js	strict
-built-ins/Promise/any/iter-arg-is-empty-iterable-reject.js	strict
-built-ins/Promise/any/iter-arg-is-empty-string-reject.js	strict
 built-ins/Promise/any/iter-arg-is-error-object-reject.js	strict
 built-ins/Promise/any/iter-arg-is-false-reject.js	strict
 built-ins/Promise/any/iter-arg-is-null-reject.js	strict
@@ -491,7 +486,6 @@ built-ins/Promise/any/iter-returns-string-reject.js	strict
 built-ins/Promise/any/iter-returns-symbol-reject.js	strict
 built-ins/Promise/any/iter-returns-true-reject.js	strict
 built-ins/Promise/any/iter-returns-undefined-reject.js	strict
-built-ins/Promise/any/resolve-before-loop-exit.js	strict
 built-ins/Promise/any/resolve-non-callable.js	strict
 built-ins/Promise/any/resolve-not-callable-reject-with-typeerror.js	strict
 built-ins/Promise/any/resolve-throws-iterator-return-is-not-callable.js	strict
@@ -505,8 +499,6 @@ built-ins/Promise/prototype/finally/subclass-resolve-count.js	strict
 built-ins/Promise/prototype/finally/subclass-species-constructor-reject-count.js	strict
 built-ins/Promise/prototype/finally/subclass-species-constructor-resolve-count.js	strict
 built-ins/Promise/prototype/finally/this-value-proxy.js	strict
-built-ins/Promise/prototype/then/rxn-handler-fulfilled-next-abrupt.js	strict
-built-ins/Promise/prototype/then/rxn-handler-rejected-next-abrupt.js	strict
 built-ins/Promise/race/S25.4.4.3_A2.2_T1.js	strict
 built-ins/Promise/race/S25.4.4.3_A2.2_T2.js	strict
 built-ins/Promise/race/S25.4.4.3_A2.2_T3.js	strict
@@ -549,7 +541,6 @@ built-ins/Promise/race/resolve-non-callable.js	strict
 built-ins/Promise/race/resolve-throws-iterator-return-is-not-callable.js	strict
 built-ins/Promise/race/resolve-throws-iterator-return-null-or-undefined.js	strict
 built-ins/Promise/reject/ctx-non-ctor.js	strict
-built-ins/Promise/resolve/arg-uniq-ctor.js	strict
 built-ins/Promise/resolve/ctx-non-ctor.js	strict
 built-ins/Promise/withResolvers/promise.js	strict
 built-ins/Promise/withResolvers/resolvers.js	strict
@@ -1433,7 +1424,6 @@ language/expressions/optional-chaining/early-errors-tail-position-optchain-templ
 language/expressions/optional-chaining/eval-optional-call.js	strict
 language/expressions/optional-chaining/iteration-statement-for-await-of.js	strict
 language/expressions/optional-chaining/iteration-statement-for-of-type-error.js	strict
-language/expressions/optional-chaining/member-expression-async-identifier.js	strict
 language/expressions/optional-chaining/member-expression.js	strict
 language/expressions/optional-chaining/new-target-optional-call.js	strict
 language/expressions/optional-chaining/optional-chain-prod-arguments.js	strict
@@ -1683,7 +1673,6 @@ language/statements/async-function/dflt-params-trailing-comma.js	strict
 language/statements/async-function/early-errors-declaration-arguments-in-formal-parameters.js	strict
 language/statements/async-function/early-errors-declaration-await-in-formals.js	strict
 language/statements/async-function/early-errors-declaration-eval-in-formal-parameters.js	strict
-language/statements/async-function/evaluation-body.js	strict
 language/statements/async-function/evaluation-default-that-throws.js	strict
 language/statements/async-function/evaluation-unmapped-arguments.js	strict
 language/statements/async-function/rest-param-strict-body.js	strict

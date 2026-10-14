@@ -22,7 +22,6 @@ struct qjs_xml_retired_s {
 
 typedef struct {
     xmlDoc             *doc;
-    xmlParserCtxt      *ctx;
     qjs_xml_retired_t  *retired;
     int                ref_count;
 } qjs_xml_doc_t;
@@ -74,6 +73,7 @@ static JSValue qjs_xml_node_make(JSContext *cx, qjs_xml_doc_t *doc,
     xmlNode *node);
 static int qjs_xml_node_has_method(JSContext *cx, JSValueConst obj,
     JSAtom prop, njs_str_t *name);
+static JSValue qjs_xml_attr_value(JSContext *cx, xmlAttr *attr);
 static int qjs_xml_node_get_own_property(JSContext *cx,
     JSPropertyDescriptor *pdesc, JSValueConst obj, JSAtom prop);
 static int qjs_xml_node_get_own_property_names(JSContext *cx,
@@ -138,7 +138,7 @@ static int qjs_xml_list_retire(JSContext *cx, qjs_xml_doc_t *doc,
 static void qjs_xml_list_append(xmlNode *parent, xmlNode *node);
 static int qjs_xml_tree_has_namespaces(xmlNode *node);
 
-static void qjs_xml_error(JSContext *cx, qjs_xml_doc_t *current,
+static void qjs_xml_error(JSContext *cx, xmlParserCtxt *ctx,
     const char *fmt, ...);
 static JSModuleDef *qjs_xml_init(JSContext *ctx, const char *name);
 
@@ -221,6 +221,7 @@ qjs_xml_parse(JSContext *cx, JSValueConst this_val, int argc,
 {
     JSValue        ret;
     qjs_bytes_t    data;
+    xmlParserCtxt  *ctx;
     qjs_xml_doc_t  *tree;
 
     if (qjs_to_bytes(cx, &data, argv[0]) < 0) {
@@ -236,23 +237,26 @@ qjs_xml_parse(JSContext *cx, JSValueConst this_val, int argc,
 
     tree->ref_count = 1;
 
-    tree->ctx = xmlNewParserCtxt();
-    if (tree->ctx == NULL) {
+    ctx = xmlNewParserCtxt();
+    if (ctx == NULL) {
         qjs_bytes_free(cx, &data);
         JS_ThrowInternalError(cx, "xmlNewParserCtxt() failed");
         qjs_xml_doc_free(JS_GetRuntime(cx), tree);
         return JS_EXCEPTION;
     }
 
-    tree->doc = xmlCtxtReadMemory(tree->ctx, (char *) data.start, data.length,
-                                  NULL, NULL, XML_PARSE_NOWARNING
-                                              | XML_PARSE_NOERROR);
+    tree->doc = xmlCtxtReadMemory(ctx, (char *) data.start, data.length,
+                                   NULL, NULL, XML_PARSE_NOWARNING
+                                               | XML_PARSE_NOERROR);
     qjs_bytes_free(cx, &data);
     if (tree->doc == NULL) {
-        qjs_xml_error(cx, tree, "failed to parse XML");
+        qjs_xml_error(cx, ctx, "failed to parse XML");
+        xmlFreeParserCtxt(ctx);
         qjs_xml_doc_free(JS_GetRuntime(cx), tree);
         return JS_EXCEPTION;
     }
+
+    xmlFreeParserCtxt(ctx);
 
     ret = JS_NewObjectClass(cx, QJS_CORE_CLASS_ID_XML_DOC);
     if (JS_IsException(ret)) {
@@ -560,10 +564,6 @@ qjs_xml_doc_free(JSRuntime *rt, qjs_xml_doc_t *current)
         xmlFreeDoc(current->doc);
     }
 
-    if (current->ctx != NULL) {
-        xmlFreeParserCtxt(current->ctx);
-    }
-
     js_free_rt(rt, current);
 }
 
@@ -708,16 +708,29 @@ qjs_xml_node_attr_handler(JSContext *cx, qjs_xml_node_t *current,
             continue;
         }
 
-        if (attr->children != NULL
-            && attr->children->next == NULL
-            && attr->children->type == XML_TEXT_NODE
-            && attr->children->content != NULL)
-        {
-            return JS_NewString(cx, (char *) attr->children->content);
-        }
+        return qjs_xml_attr_value(cx, attr);
     }
 
     return JS_UNDEFINED;
+}
+
+
+static JSValue
+qjs_xml_attr_value(JSContext *cx, xmlAttr *attr)
+{
+    JSValue  value;
+    xmlChar  *text;
+
+    text = xmlNodeGetContent((xmlNode *) attr);
+    if (text == NULL) {
+        JS_ThrowInternalError(cx, "xmlNodeGetContent() failed");
+        return JS_EXCEPTION;
+    }
+
+    value = JS_NewString(cx, (char *) text);
+    xmlFree(text);
+
+    return value;
 }
 
 
@@ -1830,7 +1843,6 @@ qjs_xml_attr_get_own_property(JSContext *cx, JSPropertyDescriptor *pdesc,
     JSValueConst obj, JSAtom prop)
 {
     size_t          size;
-    u_char          *text;
     xmlAttr         *attr;
     njs_str_t       name;
     qjs_xml_attr_t  *current;
@@ -1863,23 +1875,15 @@ qjs_xml_attr_get_own_property(JSContext *cx, JSPropertyDescriptor *pdesc,
 
         JS_FreeCString(cx, (char *) name.start);
 
-        text = xmlNodeGetContent(attr->children);
-        if (text == NULL) {
-            return 0;
-        }
-
         if (pdesc != NULL) {
             pdesc->flags = JS_PROP_ENUMERABLE;
             pdesc->getter = JS_UNDEFINED;
             pdesc->setter = JS_UNDEFINED;
-            pdesc->value  = JS_NewString(cx, (char *) text);
+            pdesc->value = qjs_xml_attr_value(cx, attr);
             if (JS_IsException(pdesc->value)) {
-                xmlFree(text);
                 return -1;
             }
         }
-
-        xmlFree(text);
 
         return 1;
     }
@@ -2427,7 +2431,7 @@ qjs_xml_tree_has_namespaces(xmlNode *node)
 
 
 static void
-qjs_xml_error(JSContext *cx, qjs_xml_doc_t *current, const char *fmt, ...)
+qjs_xml_error(JSContext *cx, xmlParserCtxt *ctx, const char *fmt, ...)
 {
     u_char          *p, *last;
     va_list         args;
@@ -2440,7 +2444,7 @@ qjs_xml_error(JSContext *cx, qjs_xml_doc_t *current, const char *fmt, ...)
     p = njs_vsprintf(errstr, last - 1, fmt, args);
     va_end(args);
 
-    err = xmlCtxtGetLastError(current->ctx);
+    err = xmlCtxtGetLastError(ctx);
 
     if (err != NULL) {
         p = njs_sprintf(p, last - 1, " (libxml2: \"%*s\" at %d:%d)",

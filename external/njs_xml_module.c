@@ -13,12 +13,6 @@
 #include <libxml/xpathInternals.h>
 
 
-typedef struct {
-    xmlDoc         *doc;
-    xmlParserCtxt  *ctx;
-} njs_xml_doc_t;
-
-
 typedef enum {
     XML_NSET_TREE = 0,
     XML_NSET_TREE_NO_COMMENTS,
@@ -108,6 +102,8 @@ static njs_int_t njs_xml_node_tag_handler(njs_vm_t *vm, njs_value_t *value,
     njs_str_t *name, njs_value_t *setval, njs_value_t *retval);
 static njs_int_t njs_xml_node_tags_handler(njs_vm_t *vm, njs_value_t *value,
     njs_str_t *name, njs_value_t *setval, njs_value_t *retval);
+static njs_int_t njs_xml_attr_value(njs_vm_t *vm, xmlAttr *attr,
+    njs_value_t *retval);
 
 static xmlNode *njs_xml_external_node(njs_vm_t *vm, njs_value_t *value);
 static const u_char *njs_xml_string_to_c_string(njs_vm_t *vm, njs_str_t *str,
@@ -130,7 +126,7 @@ static njs_xml_nset_t *njs_xml_nset_create(njs_vm_t *vm, xmlDoc *doc,
 static njs_xml_nset_t *njs_xml_nset_add(njs_xml_nset_t *nset,
     njs_xml_nset_t *add);
 static void njs_xml_nset_cleanup(void *data);
-static void njs_xml_error(njs_vm_t *vm, njs_xml_doc_t *tree, const char *fmt,
+static void njs_xml_error(njs_vm_t *vm, xmlParserCtxt *ctx, const char *fmt,
     ...);
 static njs_int_t njs_xml_init(njs_vm_t *vm);
 
@@ -456,9 +452,10 @@ static njs_int_t
 njs_xml_ext_parse(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     njs_index_t unused, njs_value_t *retval)
 {
+    xmlDoc            *doc;
     njs_int_t         ret;
     njs_str_t         data;
-    njs_xml_doc_t     *tree;
+    xmlParserCtxt     *ctx;
     njs_mp_cleanup_t  *cln;
 
     ret = njs_vm_value_to_bytes(vm, &data, njs_arg(args, nargs, 1));
@@ -466,50 +463,51 @@ njs_xml_ext_parse(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
         return NJS_ERROR;
     }
 
-    tree = njs_mp_zalloc(njs_vm_memory_pool(vm), sizeof(njs_xml_doc_t));
-    if (njs_slow_path(tree == NULL)) {
-        njs_vm_memory_error(vm);
-        return NJS_ERROR;
-    }
-
-    tree->ctx = xmlNewParserCtxt();
-    if (njs_slow_path(tree->ctx == NULL)) {
+    ctx = xmlNewParserCtxt();
+    if (njs_slow_path(ctx == NULL)) {
         njs_vm_internal_error(vm, "xmlNewParserCtxt() failed");
         return NJS_ERROR;
     }
 
-    tree->doc = xmlCtxtReadMemory(tree->ctx, (char *) data.start, data.length,
-                                  NULL, NULL, XML_PARSE_NOWARNING
-                                              | XML_PARSE_NOERROR);
-    if (njs_slow_path(tree->doc == NULL)) {
-        njs_xml_error(vm, tree, "failed to parse XML");
-        return NJS_ERROR;
+    doc = xmlCtxtReadMemory(ctx, (char *) data.start, data.length, NULL, NULL,
+                            XML_PARSE_NOWARNING | XML_PARSE_NOERROR);
+    if (njs_slow_path(doc == NULL)) {
+        njs_xml_error(vm, ctx, "failed to parse XML");
+        goto failed;
     }
+
+    xmlFreeParserCtxt(ctx);
 
     cln = njs_mp_cleanup_add(njs_vm_memory_pool(vm), 0);
     if (njs_slow_path(cln == NULL)) {
         njs_vm_memory_error(vm);
+        xmlFreeDoc(doc);
         return NJS_ERROR;
     }
 
     cln->handler = njs_xml_doc_cleanup;
-    cln->data = tree;
+    cln->data = doc;
 
-    return njs_vm_external_create(vm, retval, njs_xml_doc_proto_id,
-                                  tree, 0);
+    return njs_vm_external_create(vm, retval, njs_xml_doc_proto_id, doc, 0);
+
+failed:
+
+    xmlFreeParserCtxt(ctx);
+
+    return NJS_ERROR;
 }
 
 
 static njs_int_t
 njs_xml_doc_ext_prop_keys(njs_vm_t *vm, njs_value_t *value, njs_value_t *keys)
 {
-    xmlNode        *node;
-    njs_int_t      ret;
-    njs_value_t    *push;
-    njs_xml_doc_t  *tree;
+    xmlDoc       *doc;
+    xmlNode      *node;
+    njs_int_t    ret;
+    njs_value_t  *push;
 
-    tree = njs_vm_external(vm, njs_xml_doc_proto_id, value);
-    if (njs_slow_path(tree == NULL)) {
+    doc = njs_vm_external(vm, njs_xml_doc_proto_id, value);
+    if (njs_slow_path(doc == NULL)) {
         njs_value_undefined_set(keys);
         return NJS_DECLINED;
     }
@@ -519,7 +517,7 @@ njs_xml_doc_ext_prop_keys(njs_vm_t *vm, njs_value_t *value, njs_value_t *keys)
         return NJS_ERROR;
     }
 
-    for (node = xmlDocGetRootElement(tree->doc);
+    for (node = xmlDocGetRootElement(doc);
          node != NULL;
          node = node->next)
     {
@@ -547,14 +545,14 @@ static njs_int_t
 njs_xml_doc_ext_root(njs_vm_t *vm, njs_object_prop_t *prop, uint32_t atom_id,
      njs_value_t *value, njs_value_t *unused, njs_value_t *retval)
 {
-    xmlNode        *node;
-    njs_int_t      ret;
-    njs_str_t      name;
-    njs_bool_t     any;
-    njs_xml_doc_t  *tree;
+    xmlDoc      *doc;
+    xmlNode     *node;
+    njs_int_t   ret;
+    njs_str_t   name;
+    njs_bool_t  any;
 
-    tree = njs_vm_external(vm, njs_xml_doc_proto_id, value);
-    if (njs_slow_path(tree == NULL)) {
+    doc = njs_vm_external(vm, njs_xml_doc_proto_id, value);
+    if (njs_slow_path(doc == NULL)) {
         njs_value_undefined_set(retval);
         return NJS_DECLINED;
     }
@@ -574,7 +572,7 @@ njs_xml_doc_ext_root(njs_vm_t *vm, njs_object_prop_t *prop, uint32_t atom_id,
         name.start = NULL;
     }
 
-    for (node = xmlDocGetRootElement(tree->doc);
+    for (node = xmlDocGetRootElement(doc);
          node != NULL;
          node = node->next)
     {
@@ -1161,7 +1159,7 @@ njs_xml_node_attr_handler(njs_vm_t *vm, xmlNode *current, njs_str_t *name,
     njs_int_t     ret;
     njs_str_t     str;
     xmlAttr       *attr;
-    const u_char  *content, *name_c, *value;
+    const u_char  *name_c, *value;
     u_char        name_buf[512], value_buf[1024];
 
     if (retval != NULL && setval == NULL) {
@@ -1180,15 +1178,7 @@ njs_xml_node_attr_handler(njs_vm_t *vm, xmlNode *current, njs_str_t *name,
                 continue;
             }
 
-            if (attr->children != NULL
-                && attr->children->next == NULL
-                && attr->children->type == XML_TEXT_NODE)
-            {
-                content = (const u_char *) attr->children->content;
-
-                return njs_vm_value_string_create(vm, retval, content,
-                                                  njs_strlen(content));
-            }
+            return njs_xml_attr_value(vm, attr, retval);
         }
 
         njs_value_undefined_set(retval);
@@ -1251,6 +1241,25 @@ njs_xml_node_attr_handler(njs_vm_t *vm, xmlNode *current, njs_str_t *name,
     njs_value_undefined_set(retval);
 
     return NJS_OK;
+}
+
+
+static njs_int_t
+njs_xml_attr_value(njs_vm_t *vm, xmlAttr *attr, njs_value_t *retval)
+{
+    njs_int_t  ret;
+    xmlChar    *text;
+
+    text = xmlNodeGetContent((xmlNode *) attr);
+    if (njs_slow_path(text == NULL)) {
+        njs_vm_internal_error(vm, "xmlNodeGetContent() failed");
+        return NJS_ERROR;
+    }
+
+    ret = njs_vm_value_string_create(vm, retval, text, njs_strlen(text));
+    xmlFree(text);
+
+    return ret;
 }
 
 
@@ -1489,18 +1498,18 @@ error:
 static xmlNode *
 njs_xml_external_node(njs_vm_t *vm, njs_value_t *value)
 {
-    xmlNode        *current;
-    njs_xml_doc_t  *tree;
+    xmlDoc   *doc;
+    xmlNode  *current;
 
     current = njs_vm_external(vm, njs_xml_node_proto_id, value);
     if (njs_slow_path(current == NULL)) {
-        tree = njs_vm_external(vm, njs_xml_doc_proto_id, value);
-        if (njs_slow_path(tree == NULL)) {
+        doc = njs_vm_external(vm, njs_xml_doc_proto_id, value);
+        if (njs_slow_path(doc == NULL)) {
             njs_vm_type_error(vm, "\"this\" is not a XMLNode object");
             return NULL;
         }
 
-        current = xmlDocGetRootElement(tree->doc);
+        current = xmlDocGetRootElement(doc);
         if (njs_slow_path(current == NULL)) {
             njs_vm_type_error(vm, "\"this\" is not a XMLNode object");
             return NULL;
@@ -1767,12 +1776,7 @@ njs_xml_node_cleanup(void *data)
 static void
 njs_xml_doc_cleanup(void *data)
 {
-    njs_xml_doc_t  *current;
-
-    current = data;
-
-    xmlFreeDoc(current->doc);
-    xmlFreeParserCtxt(current->ctx);
+    xmlFreeDoc(data);
 }
 
 
@@ -2162,8 +2166,7 @@ njs_xml_attr_ext_prop_handler(njs_vm_t *vm, njs_object_prop_t *prop,
             continue;
         }
 
-        return njs_vm_value_string_create(vm, retval, node->children->content,
-                                          njs_strlen(node->children->content));
+        return njs_xml_attr_value(vm, node, retval);
     }
 
     njs_value_undefined_set(retval);
@@ -2238,7 +2241,7 @@ njs_xml_nset_cleanup(void *data)
 
 
 static void
-njs_xml_error(njs_vm_t *vm, njs_xml_doc_t *current, const char *fmt, ...)
+njs_xml_error(njs_vm_t *vm, xmlParserCtxt *ctx, const char *fmt, ...)
 {
     u_char          *p, *last;
     va_list         args;
@@ -2251,7 +2254,7 @@ njs_xml_error(njs_vm_t *vm, njs_xml_doc_t *current, const char *fmt, ...)
     p = njs_vsprintf(errstr, last - 1, fmt, args);
     va_end(args);
 
-    err = xmlCtxtGetLastError(current->ctx);
+    err = xmlCtxtGetLastError(ctx);
 
     if (err != NULL) {
         p = njs_sprintf(p, last - 1, " (libxml2: \"%*s\" at %d:%d)",

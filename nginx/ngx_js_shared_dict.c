@@ -19,8 +19,9 @@ typedef struct {
     ngx_rbtree_t           rbtree_expire;
     ngx_rbtree_node_t      sentinel_expire;
 
-    unsigned               dirty:1;
-    unsigned               writing:1;
+    ngx_msec_t             last_write;
+    ngx_uint_t             write_id;
+    ngx_uint_t             writing;
 } ngx_js_dict_sh_t;
 
 
@@ -45,6 +46,7 @@ struct ngx_js_dict_s {
     ngx_event_t            save_event;
     ngx_str_t              state_file;
     ngx_str_t              state_temp_file;
+    ngx_uint_t             write_id;
 
     ngx_js_dict_t         *next;
 };
@@ -662,7 +664,7 @@ njs_js_ext_shared_dict_clear(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
 
 done:
 
-    dict->sh->dirty = 1;
+    dict->write_id = dict->sh->write_id;
 
     ngx_rwlock_unlock(&dict->sh->rwlock);
 
@@ -1443,6 +1445,34 @@ ngx_js_dict_expire_unlink(ngx_js_dict_t *dict, ngx_js_dict_node_t *node)
 }
 
 
+static void
+ngx_js_dict_expire_link(ngx_js_dict_t *dict, ngx_js_dict_node_t *node,
+    ngx_rbtree_key_t expire)
+{
+    node->expire.key = expire;
+
+    ngx_rbtree_insert(&dict->sh->rbtree_expire, &node->expire);
+}
+
+
+static ngx_js_dict_node_t *
+ngx_js_dict_lookup_write(ngx_js_dict_t *dict, ngx_str_t *key, ngx_msec_t now)
+{
+    ngx_js_dict_node_t  *node;
+
+    node = ngx_js_dict_lookup(dict, key);
+
+    if (node != NULL && dict->timeout && now >= node->expire.key) {
+        ngx_js_dict_expire_unlink(dict, node);
+        ngx_rbtree_delete(&dict->sh->rbtree, &node->sn.node);
+        ngx_js_dict_node_free(dict, node);
+        return NULL;
+    }
+
+    return node;
+}
+
+
 static ngx_int_t
 ngx_js_dict_set(njs_vm_t *vm, ngx_js_dict_t *dict, ngx_str_t *key,
     njs_value_t *value, ngx_msec_t timeout, unsigned flags)
@@ -1456,7 +1486,7 @@ ngx_js_dict_set(njs_vm_t *vm, ngx_js_dict_t *dict, ngx_str_t *key,
 
     ngx_rwlock_wlock(&dict->sh->rwlock);
 
-    node = ngx_js_dict_lookup(dict, key);
+    node = ngx_js_dict_lookup_write(dict, key, now);
 
     if (node == NULL) {
         if (flags & NGX_JS_DICT_FLAG_MUST_EXIST) {
@@ -1470,10 +1500,8 @@ ngx_js_dict_set(njs_vm_t *vm, ngx_js_dict_t *dict, ngx_str_t *key,
 
     } else {
         if (flags & NGX_JS_DICT_FLAG_MUST_NOT_EXIST) {
-            if (!dict->timeout || now < node->expire.key) {
-                ngx_rwlock_unlock(&dict->sh->rwlock);
-                return NGX_DECLINED;
-            }
+            ngx_rwlock_unlock(&dict->sh->rwlock);
+            return NGX_DECLINED;
         }
 
         if (ngx_js_dict_update(vm, dict, node, value, timeout, now) != NGX_OK) {
@@ -1481,7 +1509,7 @@ ngx_js_dict_set(njs_vm_t *vm, ngx_js_dict_t *dict, ngx_str_t *key,
         }
     }
 
-    dict->sh->dirty = 1;
+    dict->write_id = dict->sh->write_id;
 
     ngx_rwlock_unlock(&dict->sh->rwlock);
 
@@ -1577,51 +1605,75 @@ ngx_js_dict_add(njs_vm_t *vm, ngx_js_dict_t *dict, ngx_str_t *key,
 
 
 static ngx_int_t
-ngx_js_dict_update(njs_vm_t *vm, ngx_js_dict_t *dict, ngx_js_dict_node_t *node,
-    njs_value_t *value, ngx_msec_t timeout, ngx_msec_t now)
+ngx_js_dict_update_value(ngx_js_dict_t *dict, ngx_js_dict_node_t *node,
+    ngx_js_dict_value_t *value, ngx_msec_t timeout, ngx_msec_t now)
 {
-    u_char     *p;
-    njs_str_t   string;
+    u_char            *p;
+    ngx_rbtree_key_t   expire;
+
+    expire = 0;
 
     if (dict->timeout) {
         /*
-         * Remove the node from the expire tree before allocating
-         * memory for the new value.  This serves two purposes:
-         * it prevents ngx_js_dict_evict() from freeing this node
-         * during allocation, and it allows the node to be reinserted
-         * with the updated expiry time below.
+         * Keep the node out of the expire tree while allocation may
+         * evict entries.  This prevents self-eviction and allows the
+         * old expiration to be restored if allocation fails.
          */
-        ngx_rbtree_delete(&dict->sh->rbtree_expire, &node->expire);
+        expire = ngx_js_dict_expire_unlink(dict, node);
     }
+
+    if (dict->type == NGX_JS_DICT_TYPE_STRING) {
+        p = ngx_js_dict_alloc(dict, value->str.len);
+        if (p == NULL) {
+            goto failed;
+        }
+
+        ngx_slab_free_locked(dict->shpool, node->value.str.data);
+        ngx_memcpy(p, value->str.data, value->str.len);
+
+        node->value.str.data = p;
+        node->value.str.len = value->str.len;
+
+    } else {
+        node->value.number = value->number;
+    }
+
+    if (dict->timeout) {
+        ngx_js_dict_expire_link(dict, node, now + timeout);
+    }
+
+    return NGX_OK;
+
+failed:
+
+    if (dict->timeout) {
+        ngx_js_dict_expire_link(dict, node, expire);
+    }
+
+    return NGX_ERROR;
+}
+
+
+static ngx_int_t
+ngx_js_dict_update(njs_vm_t *vm, ngx_js_dict_t *dict, ngx_js_dict_node_t *node,
+    njs_value_t *value, ngx_msec_t timeout, ngx_msec_t now)
+{
+    njs_str_t            string;
+    ngx_js_dict_value_t  entry;
 
     if (dict->type == NGX_JS_DICT_TYPE_STRING) {
         njs_value_string_get(vm, value, &string);
 
-        p = ngx_js_dict_alloc(dict, string.length);
-        if (p == NULL) {
-            if (dict->timeout) {
-                ngx_rbtree_insert(&dict->sh->rbtree_expire, &node->expire);
-            }
-
-            return NGX_ERROR;
-        }
-
-        ngx_slab_free_locked(dict->shpool, node->value.str.data);
-        ngx_memcpy(p, string.start, string.length);
-
-        node->value.str.data = p;
-        node->value.str.len = string.length;
+        entry.str.data = string.start;
+        entry.str.len = string.length;
 
     } else {
-        node->value.number = njs_value_number(value);
+        /* GCC complains about uninitialized entry.str.data. */
+        entry.str.data = NULL;
+        entry.number = njs_value_number(value);
     }
 
-    if (dict->timeout) {
-        node->expire.key = now + timeout;
-        ngx_rbtree_insert(&dict->sh->rbtree_expire, &node->expire);
-    }
-
-    return NGX_OK;
+    return ngx_js_dict_update_value(dict, node, &entry, timeout, now);
 }
 
 
@@ -1632,36 +1684,28 @@ ngx_js_dict_delete(njs_vm_t *vm, ngx_js_dict_t *dict, ngx_str_t *key,
     ngx_int_t            rc;
     ngx_msec_t           now;
     ngx_time_t          *tp;
-    ngx_rbtree_key_t     expire;
     ngx_js_dict_node_t  *node;
+
+    tp = ngx_timeofday();
+    now = tp->sec * 1000 + tp->msec;
 
     ngx_rwlock_wlock(&dict->sh->rwlock);
 
-    node = ngx_js_dict_lookup(dict, key);
+    node = ngx_js_dict_lookup_write(dict, key, now);
 
     if (node == NULL) {
         ngx_rwlock_unlock(&dict->sh->rwlock);
         return NGX_DECLINED;
     }
 
-    expire = 0;
-
     if (dict->timeout) {
-        expire = ngx_js_dict_expire_unlink(dict, node);
+        ngx_js_dict_expire_unlink(dict, node);
     }
 
     ngx_rbtree_delete(&dict->sh->rbtree, (ngx_rbtree_node_t *) node);
 
     if (retval != NULL) {
-        tp = ngx_timeofday();
-        now = tp->sec * 1000 + tp->msec;
-
-        if (!dict->timeout || now < expire) {
-            rc = ngx_js_dict_copy_value_locked(vm, dict, node, retval);
-
-        } else {
-            rc = NGX_DECLINED;
-        }
+        rc = ngx_js_dict_copy_value_locked(vm, dict, node, retval);
 
     } else {
         rc = NGX_OK;
@@ -1669,7 +1713,7 @@ ngx_js_dict_delete(njs_vm_t *vm, ngx_js_dict_t *dict, ngx_str_t *key,
 
     ngx_js_dict_node_free(dict, node);
 
-    dict->sh->dirty = 1;
+    dict->write_id = dict->sh->write_id;
 
     ngx_rwlock_unlock(&dict->sh->rwlock);
 
@@ -1694,7 +1738,7 @@ ngx_js_dict_incr(njs_vm_t *vm, ngx_js_dict_t *dict, ngx_str_t *key,
 
     ngx_rwlock_wlock(&dict->sh->rwlock);
 
-    node = ngx_js_dict_lookup(dict, key);
+    node = ngx_js_dict_lookup_write(dict, key, now);
 
     if (node == NULL) {
         njs_value_number_set(init, njs_value_number(init)
@@ -1720,7 +1764,7 @@ ngx_js_dict_incr(njs_vm_t *vm, ngx_js_dict_t *dict, ngx_str_t *key,
         }
     }
 
-    dict->sh->dirty = 1;
+    dict->write_id = dict->sh->write_id;
 
     ngx_rwlock_unlock(&dict->sh->rwlock);
 
@@ -1963,6 +2007,7 @@ ngx_js_dict_render_json(ngx_js_dict_t *dict, njs_chb_t *chain)
 {
     u_char              *p, *dst;
     size_t               len;
+    ngx_uint_t           first;
     ngx_msec_t           now;
     ngx_time_t          *tp;
     ngx_rbtree_t        *rbtree;
@@ -1981,6 +2026,8 @@ ngx_js_dict_render_json(ngx_js_dict_t *dict, njs_chb_t *chain)
         return NGX_OK;
     }
 
+    first = 1;
+
     for (rn = ngx_rbtree_min(rbtree->root, rbtree->sentinel);
          rn != NULL;
          rn = next)
@@ -1992,6 +2039,12 @@ ngx_js_dict_render_json(ngx_js_dict_t *dict, njs_chb_t *chain)
         if (dict->timeout && now >= node->expire.key) {
             continue;
         }
+
+        if (!first) {
+            njs_chb_append_literal(chain, ",");
+        }
+
+        first = 0;
 
         if (ngx_js_render_string(chain, &node->sn.str) != NGX_OK) {
             return NGX_ERROR;
@@ -2031,10 +2084,6 @@ ngx_js_dict_render_json(ngx_js_dict_t *dict, njs_chb_t *chain)
         }
 
         njs_chb_append_literal(chain, "}");
-
-        if (next != NULL) {
-            njs_chb_append_literal(chain, ",");
-        }
     }
 
     njs_chb_append_literal(chain, "}");
@@ -2319,6 +2368,7 @@ ngx_js_dict_parse_entry(ngx_js_dict_t *dict, ngx_pool_t *pool,
     }
 
     see_value = 0;
+    entry->expire = 0;
 
     while (1) {
         p = ngx_js_skip_space(p, end);
@@ -2528,12 +2578,16 @@ ngx_js_dict_save(ngx_js_dict_t *dict)
     u_char                 *name;
     ngx_int_t               rc;
     ngx_log_t              *log;
+    ngx_uint_t              write_id;
+    ngx_msec_t              now;
     njs_chb_t               chain;
     ngx_file_t              file;
     ngx_pool_t             *pool;
     ngx_chain_t            *out, *cl, **ll;
     njs_chb_node_t         *node;
     ngx_ext_rename_file_t   ext;
+
+    now = ngx_current_msec;
 
     log = dict->shm_zone->shm.log;
 
@@ -2544,13 +2598,31 @@ ngx_js_dict_save(ngx_js_dict_t *dict)
 
     ngx_rwlock_wlock(&dict->sh->rwlock);
 
-    if (!dict->sh->dirty) {
+    if (dict->write_id < dict->sh->write_id) {
         ngx_rwlock_unlock(&dict->sh->rwlock);
         ngx_destroy_pool(pool);
         return NGX_OK;
     }
 
     if (dict->sh->writing) {
+        rc = NGX_AGAIN;
+
+        if (ngx_exiting
+            && (ngx_msec_int_t) (now - dict->sh->last_write) >= 60000)
+        {
+            /*
+             * The writer may have died during the save, leaving the flag
+             * set.  Do not delay the worker exit indefinitely.
+             */
+            rc = NGX_ERROR;
+        }
+
+        ngx_rwlock_unlock(&dict->sh->rwlock);
+        ngx_destroy_pool(pool);
+        return rc;
+    }
+
+    if ((ngx_msec_int_t) (now - dict->sh->last_write) < 1000) {
         ngx_rwlock_unlock(&dict->sh->rwlock);
         ngx_destroy_pool(pool);
         return NGX_AGAIN;
@@ -2569,11 +2641,19 @@ ngx_js_dict_save(ngx_js_dict_t *dict)
     }
 
     dict->sh->writing = 1;
-    dict->sh->dirty = 0;
+    dict->sh->write_id++;
+    dict->sh->last_write = now;
+
+    write_id = dict->sh->write_id;
 
     ngx_rwlock_unlock(&dict->sh->rwlock);
 
     name = dict->state_temp_file.data;
+
+    ngx_memzero(&file, sizeof(ngx_file_t));
+    file.fd = NGX_INVALID_FILE;
+    file.name = dict->state_temp_file;
+    file.log = log;
 
     out = NULL;
     ll = &out;
@@ -2600,10 +2680,6 @@ ngx_js_dict_save(ngx_js_dict_t *dict)
 
     *ll = NULL;
 
-    ngx_memzero(&file, sizeof(ngx_file_t));
-    file.name = dict->state_temp_file;
-    file.log = log;
-
     file.fd = ngx_open_file(file.name.data, NGX_FILE_WRONLY, NGX_FILE_TRUNCATE,
                             NGX_FILE_DEFAULT_ACCESS);
 
@@ -2624,6 +2700,8 @@ ngx_js_dict_save(ngx_js_dict_t *dict)
     if (ngx_close_file(file.fd) == NGX_FILE_ERROR) {
         ngx_log_error(NGX_LOG_ALERT, log, ngx_errno,
                      ngx_close_file_n " \"%s\" failed", file.name.data);
+        file.fd = NGX_INVALID_FILE;
+        goto error;
     }
 
     file.fd = NGX_INVALID_FILE;
@@ -2657,9 +2735,10 @@ error:
 
     ngx_destroy_pool(pool);
 
+    dict->write_id = write_id;
+
     /* no lock required */
     dict->sh->writing = 0;
-    dict->sh->dirty = 1;
 
     return NGX_ERROR;
 }
@@ -2785,14 +2864,14 @@ ngx_js_dict_load(ngx_js_dict_t *dict)
             expire = entries[i].expire;
 
             if (expire && now >= expire) {
-                dict->sh->dirty = 1;
+                dict->write_id = dict->sh->write_id;
                 continue;
             }
 
             if (expire == 0) {
                 /* treat state without expire as new */
                 expire = now + dict->timeout;
-                dict->sh->dirty = 1;
+                dict->write_id = dict->sh->write_id;
             }
 
         } else {
@@ -2874,9 +2953,18 @@ ngx_js_dict_init_worker(ngx_js_main_conf_t *jmcf)
 
     for (dict = jmcf->dicts; dict != NULL; dict = dict->next) {
 
-        if (!dict->sh->dirty || !dict->state_file.data) {
+        if (!dict->state_file.data) {
             continue;
         }
+
+        ngx_rwlock_rlock(&dict->sh->rwlock);
+
+        if (dict->write_id < dict->sh->write_id) {
+            ngx_rwlock_unlock(&dict->sh->rwlock);
+            continue;
+        }
+
+        ngx_rwlock_unlock(&dict->sh->rwlock);
 
         ngx_add_timer(&dict->save_event, 1000);
     }
@@ -2931,6 +3019,9 @@ ngx_js_dict_init_zone(ngx_shm_zone_t *shm_zone, void *data)
     }
 
     dict->shpool->data = dict->sh;
+
+    dict->sh->last_write = ngx_current_msec;
+    dict->sh->write_id = 1;
 
     ngx_rbtree_init(&dict->sh->rbtree, &dict->sh->sentinel,
                     ngx_str_rbtree_insert_value);
@@ -3338,7 +3429,7 @@ ngx_qjs_ext_shared_dict_clear(JSContext *cx, JSValueConst this_val,
 
 done:
 
-    dict->sh->dirty = 1;
+    dict->write_id = dict->sh->write_id;
 
     ngx_rwlock_unlock(&dict->sh->rwlock);
 
@@ -4058,36 +4149,28 @@ ngx_qjs_dict_delete(JSContext *cx, ngx_js_dict_t *dict, ngx_str_t *key,
     JSValue              ret;
     ngx_msec_t           now;
     ngx_time_t          *tp;
-    ngx_rbtree_key_t     expire;
     ngx_js_dict_node_t  *node;
+
+    tp = ngx_timeofday();
+    now = tp->sec * 1000 + tp->msec;
 
     ngx_rwlock_wlock(&dict->sh->rwlock);
 
-    node = ngx_qjs_dict_lookup(dict, key);
+    node = ngx_js_dict_lookup_write(dict, key, now);
 
     if (node == NULL) {
         ngx_rwlock_unlock(&dict->sh->rwlock);
-        return JS_UNDEFINED;
+        return retval ? JS_UNDEFINED : JS_FALSE;
     }
 
-    expire = 0;
-
     if (dict->timeout) {
-        expire = ngx_js_dict_expire_unlink(dict, node);
+        ngx_js_dict_expire_unlink(dict, node);
     }
 
     ngx_rbtree_delete(&dict->sh->rbtree, (ngx_rbtree_node_t *) node);
 
     if (retval) {
-        tp = ngx_timeofday();
-        now = tp->sec * 1000 + tp->msec;
-
-        if (!dict->timeout || now < expire) {
-            ret = ngx_qjs_dict_copy_value_locked(cx, dict, node);
-
-        } else {
-            ret = JS_UNDEFINED;
-        }
+        ret = ngx_qjs_dict_copy_value_locked(cx, dict, node);
 
     } else {
         ret = JS_TRUE;
@@ -4095,7 +4178,7 @@ ngx_qjs_dict_delete(JSContext *cx, ngx_js_dict_t *dict, ngx_str_t *key,
 
     ngx_js_dict_node_free(dict, node);
 
-    dict->sh->dirty = 1;
+    dict->write_id = dict->sh->write_id;
 
     ngx_rwlock_unlock(&dict->sh->rwlock);
 
@@ -4159,7 +4242,7 @@ ngx_qjs_dict_incr(JSContext *cx, ngx_js_dict_t *dict, ngx_str_t *key,
 
     ngx_rwlock_wlock(&dict->sh->rwlock);
 
-    node = ngx_qjs_dict_lookup(dict, key);
+    node = ngx_js_dict_lookup_write(dict, key, now);
 
     if (node == NULL) {
         value = JS_NewFloat64(cx, init + delta);
@@ -4183,7 +4266,7 @@ ngx_qjs_dict_incr(JSContext *cx, ngx_js_dict_t *dict, ngx_str_t *key,
         }
     }
 
-    dict->sh->dirty = 1;
+    dict->write_id = dict->sh->write_id;
 
     ngx_rwlock_unlock(&dict->sh->rwlock);
 
@@ -4208,7 +4291,7 @@ ngx_qjs_dict_set(JSContext *cx, ngx_js_dict_t *dict, ngx_str_t *key,
 
     ngx_rwlock_wlock(&dict->sh->rwlock);
 
-    node = ngx_qjs_dict_lookup(dict, key);
+    node = ngx_js_dict_lookup_write(dict, key, now);
 
     if (node == NULL) {
         if (flags & NGX_JS_DICT_FLAG_MUST_EXIST) {
@@ -4223,10 +4306,8 @@ ngx_qjs_dict_set(JSContext *cx, ngx_js_dict_t *dict, ngx_str_t *key,
     } else {
 
         if (flags & NGX_JS_DICT_FLAG_MUST_NOT_EXIST) {
-            if (!dict->timeout || now < node->expire.key) {
-                ngx_rwlock_unlock(&dict->sh->rwlock);
-                return JS_FALSE;
-            }
+            ngx_rwlock_unlock(&dict->sh->rwlock);
+            return JS_FALSE;
         }
 
         if (ngx_qjs_dict_update(cx, dict, node, value, timeout, now)
@@ -4236,7 +4317,7 @@ ngx_qjs_dict_set(JSContext *cx, ngx_js_dict_t *dict, ngx_str_t *key,
         }
     }
 
-    dict->sh->dirty = 1;
+    dict->write_id = dict->sh->write_id;
 
     ngx_rwlock_unlock(&dict->sh->rwlock);
 
@@ -4258,65 +4339,31 @@ static ngx_int_t
 ngx_qjs_dict_update(JSContext *cx, ngx_js_dict_t *dict,
     ngx_js_dict_node_t *node, JSValue value, ngx_msec_t timeout, ngx_msec_t now)
 {
-    u_char     *p;
-    ngx_str_t   string;
-
-    if (dict->timeout) {
-        /*
-         * Remove the node from the expire tree before allocating
-         * memory for the new value.  This serves two purposes:
-         * it prevents ngx_js_dict_evict() from freeing this node
-         * during allocation, and it allows the node to be reinserted
-         * with the updated expiry time below.
-         */
-        ngx_rbtree_delete(&dict->sh->rbtree_expire, &node->expire);
-    }
+    ngx_int_t            rc;
+    ngx_js_dict_value_t  entry;
 
     if (dict->type == NGX_JS_DICT_TYPE_STRING) {
-        string.data = (u_char *) JS_ToCStringLen(cx, &string.len, value);
-        if (string.data == NULL) {
-            if (dict->timeout) {
-                ngx_rbtree_insert(&dict->sh->rbtree_expire, &node->expire);
-            }
-
+        entry.str.data = (u_char *) JS_ToCStringLen(cx, &entry.str.len, value);
+        if (entry.str.data == NULL) {
             return NGX_ERROR;
         }
-
-        p = ngx_js_dict_alloc(dict, string.len);
-        if (p == NULL) {
-            JS_FreeCString(cx, (char *) string.data);
-
-            if (dict->timeout) {
-                ngx_rbtree_insert(&dict->sh->rbtree_expire, &node->expire);
-            }
-
-            return NGX_ERROR;
-        }
-
-        ngx_slab_free_locked(dict->shpool, node->value.str.data);
-        ngx_memcpy(p, string.data, string.len);
-
-        node->value.str.data = p;
-        node->value.str.len = string.len;
-
-        JS_FreeCString(cx, (char *) string.data);
 
     } else {
-        if (JS_ToFloat64(cx, &node->value.number, value) < 0) {
-            if (dict->timeout) {
-                ngx_rbtree_insert(&dict->sh->rbtree_expire, &node->expire);
-            }
+        /* GCC complains about uninitialized entry.str.data. */
+        entry.str.data = NULL;
 
+        if (JS_ToFloat64(cx, &entry.number, value) < 0) {
             return NGX_ERROR;
         }
     }
 
-    if (dict->timeout) {
-        node->expire.key = now + timeout;
-        ngx_rbtree_insert(&dict->sh->rbtree_expire, &node->expire);
+    rc = ngx_js_dict_update_value(dict, node, &entry, timeout, now);
+
+    if (dict->type == NGX_JS_DICT_TYPE_STRING) {
+        JS_FreeCString(cx, (char *) entry.str.data);
     }
 
-    return NGX_OK;
+    return rc;
 }
 
 

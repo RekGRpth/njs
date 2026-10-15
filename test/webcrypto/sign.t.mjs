@@ -1,5 +1,5 @@
 /*---
-includes: [compatFs.js, compatBuffer.js, compatWebcrypto.js, runTsuite.js, webCryptoUtils.js]
+includes: [compatFs.js, compatBuffer.js, compatNjs.js, compatWebcrypto.js, runTsuite.js, webCryptoUtils.js]
 flags: [async]
 ---*/
 
@@ -152,6 +152,55 @@ function p(args, default_opts) {
 
     return params;
 }
+
+async function decrypt_error(key) {
+    try {
+        await crypto.subtle.decrypt(
+            {name: "AES-CBC", iv: new Uint8Array(16)}, key,
+            new Uint8Array(16));
+    } catch (e) {
+        return e.toString();
+    }
+
+    throw Error("decrypt accepted invalid padding");
+}
+
+async function test_verify_error_queue() {
+    let pair = await crypto.subtle.generateKey(
+        {name: "RSA-PSS", modulusLength: 2048, hash: "SHA-256",
+         publicExponent: new Uint8Array([1, 0, 1])},
+        false, ["sign", "verify"]);
+    let key = await crypto.subtle.importKey("raw", new Uint8Array(16),
+                                           "AES-CBC", false, ["decrypt"]);
+    let options = {name: "RSA-PSS", saltLength: 32};
+    let data = new Uint8Array([1, 2, 3]);
+    let signature = await crypto.subtle.sign(options, pair.privateKey, data);
+
+    /* Drain errors left by preceding tests before taking the baseline. */
+    await decrypt_error(key);
+    let expected = await decrypt_error(key);
+
+    data[0] ^= 1;
+    let verified = await crypto.subtle.verify(options, pair.publicKey,
+                                             signature, data);
+    if (verified !== false) {
+        throw Error("verify accepted an invalid signature");
+    }
+
+    let actual = await decrypt_error(key);
+    if (actual !== expected) {
+        throw Error(`verify polluted OpenSSL errors: ${actual} != ${expected}`);
+    }
+
+    return "SUCCESS";
+}
+
+let verify_error_queue_tsuite = {
+    name: "verify OpenSSL error queue",
+    skip: () => !has_njs() || !has_webcrypto(),
+    T: test_verify_error_queue,
+    tests: [{}],
+};
 
 let hmac_tsuite = {
     name: "HMAC sign",
@@ -349,10 +398,56 @@ let ecdsa_tsuite = {
           exception: "TypeError: Unsupported key usage for a ECDSA key" },
 ]};
 
+async function test_ecdsa_signature_length(params) {
+    let pair = await crypto.subtle.generateKey(
+        {name: "ECDSA", namedCurve: params.curve}, false, ["sign", "verify"]);
+    let options = {name: "ECDSA", hash: "SHA-256"};
+    let data = new Uint8Array([1, 2, 3]);
+    let signature = await crypto.subtle.sign(options, pair.privateKey, data);
+
+    if (signature.byteLength !== params.length) {
+        throw Error("unexpected ECDSA signature length");
+    }
+
+    let lengths = [0, 3, params.length - 1, params.length + 1];
+    for (let i = 0; i < lengths.length; i++) {
+        let length = lengths[i];
+        let invalid = new Uint8Array(length);
+        invalid.set(new Uint8Array(signature).subarray(0, length));
+
+        let verified = await crypto.subtle.verify(options, pair.publicKey,
+                                                  invalid, data);
+        if (verified !== false) {
+            throw Error(`ECDSA accepted a signature of length ${length}`);
+        }
+    }
+
+    let verified = await crypto.subtle.verify(options, pair.publicKey,
+                                              signature, data);
+    if (verified !== true) {
+        throw Error("ECDSA rejected a valid signature");
+    }
+
+    return "SUCCESS";
+}
+
+let ecdsa_signature_length_tsuite = {
+    name: "ECDSA signature length",
+    skip: () => !has_webcrypto(),
+    T: test_ecdsa_signature_length,
+    tests: [
+        {curve: "P-256", length: 64},
+        {curve: "P-384", length: 96},
+        {curve: "P-521", length: 132},
+    ],
+};
+
 run([
     hmac_tsuite,
     rsassa_pkcs1_v1_5_tsuite,
     rsa_pss_tsuite,
-    ecdsa_tsuite
+    ecdsa_tsuite,
+    ecdsa_signature_length_tsuite,
+    verify_error_queue_tsuite
 ])
 .then($DONE, $DONE);

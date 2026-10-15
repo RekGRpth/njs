@@ -43,6 +43,7 @@ http {
     js_shared_dict_zone zone=waka:32k timeout=1000s type=number;
     js_shared_dict_zone zone=no_timeout:32k;
     js_shared_dict_zone zone=overflow:32k;
+    js_shared_dict_zone zone=rollback:32k timeout=1000s;
 
     server {
         listen       127.0.0.1:8080;
@@ -126,6 +127,10 @@ http {
 
         location /ttl {
             js_content test.ttl;
+        }
+
+        location /update_failed {
+            js_content test.update_failed;
         }
 
         location /zones {
@@ -344,6 +349,29 @@ $t->write_file('test.js', <<'EOF');
         r.return(200, val === undefined ? 'undefined' : val);
     }
 
+    function update_failed(r) {
+        var dict = ngx.shared.rollback;
+        var failed = false;
+
+        dict.clear();
+        dict.set('target', 'old', 30000);
+
+        try {
+            dict.set('target', 'x'.repeat(dict.capacity * 2));
+
+        } catch (e) {
+            failed = e instanceof SharedMemoryError;
+        }
+
+        dict.set('probe', 'ok');
+
+        var ttl = dict.ttl('target');
+        var valid = ttl !== undefined && ttl > 0;
+
+        r.return(200, `failed:${failed},value:${dict.get('target')},`
+                      + `ttl:${valid}`);
+    }
+
     function zones(r) {
         r.return(200, Object.keys(ngx.shared).sort());
     }
@@ -351,12 +379,12 @@ $t->write_file('test.js', <<'EOF');
     export default { add, capacity, chain, clear, del, free_space, get,
                      has, incr, items, keys, name, njs: test_njs, pop,
                      replace, set, set_clear, size, ttl, zones,
-                     overflow };
+                     overflow, update_failed };
 EOF
 
 $t->try_run('no js_shared_dict_zone');
 
-$t->plan(61);
+$t->plan(77);
 
 ###############################################################################
 
@@ -404,10 +432,18 @@ like(http_get('/replace?dict=foo&key=FOO2&value=aaa'), qr/true/,
 like(http_get('/replace?dict=foo&key=NOT_EXISTING&value=aaa'), qr/false/,
 	'failed replace foo.NOT_EXISTING');
 
+http_get('/set?dict=foo&key=DELETE&value=xxx');
+http_get('/set?dict=foo&key=POP&value=xxx');
+
 select undef, undef, undef, 2.1;
 
-like(http_get('/get?dict=foo&key=FOO'), qr/undefined/, 'get expired foo.FOO');
-like(http_get('/pop?dict=foo&key=FOO'), qr/undefined/, 'pop expired foo.FOO');
+like(http_get('/get?dict=foo&key=FOO2'), qr/undefined/,
+	'get expired foo.FOO2');
+like(http_get('/pop?dict=foo&key=POP'), qr/undefined/, 'pop expired foo.POP');
+like(http_get('/has?dict=foo&key=FOO3'), qr/false/,
+	'has expired foo.FOO3');
+like(http_get('/ttl?dict=foo&key=FOO3'), qr/undefined/,
+	'ttl expired foo.FOO3');
 
 TODO: {
 local $TODO = 'not yet' unless has_version('0.8.1');
@@ -416,10 +452,26 @@ like(http_get('/keys?dict=foo'), qr/empty/, 'foo keys after expire');
 like(http_get('/keys?dict=bar'), qr/FOO\,FOO2/, 'bar keys after a delay');
 like(http_get('/size?dict=foo'), qr/size: 0/,
 	'no of items in foo after expire');
+like(http_get('/items?dict=foo'), qr/\x0d\x0a\x0d\x0a$/,
+	'foo items after expire');
 like(http_get('/items?dict=bar'), qr/FOO,zzz|FOO2,aaa/,
 	'bar items');
 like(http_get('/items?dict=waka'), qr/FOO,47|FOO2,7779|FOO3,3338/,
 	'waka items');
+
+}
+
+TODO: {
+local $TODO = 'not yet' unless has_version('1.0.3');
+
+like(http_get('/replace?dict=foo&key=FOO2&value=aaa'), qr/false/,
+	'replace expired foo.FOO2');
+like(http_get('/get?dict=foo&key=FOO2'), qr/undefined/,
+	'failed replace does not revive foo.FOO2');
+like(http_get('/delete?dict=foo&key=DELETE'), qr/false/,
+	'delete expired foo.DELETE');
+like(http_get('/delete?dict=foo&key=DELETE'), qr/false/,
+	'delete missing foo.DELETE');
 
 }
 
@@ -480,6 +532,38 @@ my $ttl_incr_def = get_ttl('/ttl?dict=waka&key=TTL_INCR_DEF');
 ok($ttl_incr_def >= 900000 && $ttl_incr_def <= 1000000,
 	'incr without timeout uses directive default');
 
+http_get('/set?dict=waka&key=EXPIRED&value=100&timeout=100');
+select undef, undef, undef, 0.2;
+
+TODO: {
+local $TODO = 'not yet' unless has_version('1.0.3');
+
+like(http_get('/incr?dict=waka&key=EXPIRED&by=3&def=7'), qr/^10$/m,
+	'incr expired entry uses init');
+like(http_get('/get?dict=waka&key=EXPIRED'), qr/^10$/m,
+	'incr expired entry creates visible value');
+my $ttl_expired = get_ttl('/ttl?dict=waka&key=EXPIRED');
+ok($ttl_expired >= 900000 && $ttl_expired <= 1000000,
+	'incr expired entry uses directive timeout');
+
+}
+
+http_get('/set?dict=waka&key=EXPIRED_EXPLICIT&value=100&timeout=100');
+select undef, undef, undef, 0.2;
+
+TODO: {
+local $TODO = 'not yet' unless has_version('1.0.3');
+
+like(http_get('/incr?dict=waka&key=EXPIRED_EXPLICIT&by=3&def=7&timeout=30000'),
+	qr/^10$/m, 'incr expired entry with explicit timeout uses init');
+like(http_get('/get?dict=waka&key=EXPIRED_EXPLICIT'), qr/^10$/m,
+	'incr expired entry with explicit timeout creates visible value');
+my $ttl_explicit = get_ttl('/ttl?dict=waka&key=EXPIRED_EXPLICIT');
+ok($ttl_explicit >= 25000 && $ttl_explicit <= 30000,
+	'incr expired entry uses explicit timeout');
+
+}
+
 like(http_get('/pop?dict=bar&key=FOO'), qr/zzz/, 'pop bar.FOO');
 like(http_get('/pop?dict=bar&key=FOO'), qr/undefined/, 'pop deleted bar.FOO');
 
@@ -493,6 +577,17 @@ like(http_get('/clear?dict=foo'), qr/undefined/, 'clear foo');
 like(http_get('/size?dict=foo'), qr/size: 0/, 'no of items in foo after clear');
 like(http_get('/set_clear'), qr/size: 0/,
 	'no of items in no_timeout after clear');
+
+my $update_failed = http_get('/update_failed');
+like($update_failed, qr/failed:true/, 'failed update throws');
+
+TODO: {
+local $TODO = 'not yet' unless has_version('1.0.3');
+
+like($update_failed, qr/value:old/, 'failed update preserves value');
+like($update_failed, qr/ttl:true/, 'failed update preserves ttl');
+
+}
 
 TODO: {
 local $TODO = 'not yet' unless has_version('0.8.8');

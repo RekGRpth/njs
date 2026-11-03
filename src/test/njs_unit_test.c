@@ -22033,6 +22033,35 @@ static njs_unit_test_t  njs_externals_test[] =
     { njs_str("new Uint8Array($r.buffer.sort().slice(0,3))"),
       njs_str("129,144,145") },
 
+    { njs_str("var b = $r.buffer; "
+              "var v = new DataView(b.buffer, b.byteOffset);"
+              "v.setUint8(0, '@'.codePointAt(0));"
+              "[b[0], $r.buffer[0]]"),
+      njs_str("64,208") },
+
+    { njs_str("var b = new Uint8Array($r.arrayBuffer);"
+              "b[0] = '@'.codePointAt(0);"
+              "[b[0], new Uint8Array($r.arrayBuffer)[0]]"),
+      njs_str("64,208") },
+
+    { njs_str("var b = $r.buffer;"
+              "(new TextEncoder()).encodeInto('@', b);"
+              "[b[0], $r.buffer[0]]"),
+      njs_str("64,208") },
+
+#if (NJS_HAVE_OPENSSL)
+    { njs_str("var b = $r.buffer; crypto.getRandomValues(b);"
+              "[b.length, $r.buffer[0]]"),
+      njs_str("22,208") },
+
+    { njs_str("var v = new DataView(new ArrayBuffer(4));"
+              "crypto.getRandomValues(v) === v"),
+      njs_str("true") },
+
+    { njs_str("var s = 'abc' + 'defgh'; crypto.getRandomValues(s)"),
+      njs_str("TypeError: first argument must be a Buffer or DataView") },
+#endif
+
     { njs_str("$r.buffer instanceof Buffer"),
       njs_str("true") },
 
@@ -23973,6 +24002,98 @@ njs_vm_object_alloc_test(njs_vm_t *vm, njs_opts_t *opts, njs_stat_t *stat)
 
 
 static njs_int_t
+njs_vm_array_buffer_test(njs_vm_t *unused, njs_opts_t *opts, njs_stat_t *stat)
+{
+    u_char             *start, *data[2];
+    njs_vm_t           *vm;
+    njs_int_t           ret;
+    njs_uint_t          i;
+    njs_str_t           bytes;
+    njs_vm_opt_t        options;
+    njs_opaque_value_t  buffers[2], retval;
+
+    static const njs_str_t  names[] = {
+        njs_str("privateBuffer"), njs_str("sharedBuffer")
+    };
+
+    static const njs_str_t  script = njs_str(
+        "new Uint8Array(privateBuffer)[0] = 88;"
+        "new DataView(sharedBuffer).setUint8(0, 88);");
+
+    njs_vm_opt_init(&options);
+    options.init = 1;
+
+    vm = njs_vm_create(&options);
+    if (vm == NULL) {
+        return NJS_ERROR;
+    }
+
+    ret = NJS_ERROR;
+
+    for (i = 0; i < njs_nitems(buffers); i++) {
+        data[i] = njs_mp_alloc(njs_vm_memory_pool(vm), 2);
+        if (data[i] == NULL) {
+            ret = NJS_ERROR;
+            goto done;
+        }
+
+        memcpy(data[i], "ab", 2);
+
+        ret = njs_vm_value_array_buffer_set(vm, njs_value_arg(&buffers[i]),
+                                            data[i], 2, i);
+        if (ret != NJS_OK) {
+            goto done;
+        }
+
+        ret = njs_vm_bind(vm, &names[i], njs_value_arg(&buffers[i]), 0);
+        if (ret != NJS_OK) {
+            goto done;
+        }
+    }
+
+    start = script.start;
+    ret = njs_vm_compile(vm, &start, start + script.length);
+    if (ret != NJS_OK) {
+        goto done;
+    }
+
+    ret = njs_vm_start(vm, njs_value_arg(&retval));
+    if (ret != NJS_OK) {
+        goto done;
+    }
+
+    for (i = 0; i < njs_nitems(buffers); i++) {
+        ret = njs_vm_value_to_bytes(vm, &bytes, njs_value_arg(&buffers[i]));
+        if (ret != NJS_OK) {
+            goto done;
+        }
+
+        if (bytes.length != 2 || bytes.start[0] != 88 || bytes.start[1] != 'b'
+            || (bytes.start != data[i]) != (i != 0)
+            || data[i][0] != ((i == 0) ? 88 : 'a'))
+        {
+            njs_printf("ArrayBuffer shared=%ui: unexpected backing data\n", i);
+            ret = NJS_ERROR;
+            goto done;
+        }
+    }
+
+done:
+
+    njs_vm_destroy(vm);
+
+    if (ret == NJS_OK) {
+        stat->passed++;
+
+    } else {
+        stat->failed++;
+    }
+
+    return NJS_OK;
+}
+
+
+static njs_int_t
 njs_chb_test(njs_vm_t *vm, njs_opts_t *opts, njs_stat_t *stat)
 {
     u_char     *p;
@@ -24450,6 +24571,8 @@ njs_vm_internal_api_test(njs_unit_test_t unused[], size_t num, njs_str_t *name,
     } tests[] = {
         { njs_vm_object_alloc_test,
           njs_str("njs_vm_object_alloc_test") },
+        { njs_vm_array_buffer_test,
+          njs_str("njs_vm_array_buffer_test") },
         { njs_chb_test,
           njs_str("njs_chb_test") },
         { njs_sort_test,

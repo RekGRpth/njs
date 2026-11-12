@@ -235,8 +235,20 @@ struct ngx_js_ctx_s {
 };
 
 
+#if (NJS_HAVE_QUICKJS)
+typedef struct {
+    JSRuntime                   *runtime;
+    ngx_uint_t                   references;
+    unsigned                     alive:1;
+} ngx_qjs_owner_t;
+#endif
+
+
 typedef struct {
     void                        *external;
+#if (NJS_HAVE_QUICKJS)
+    ngx_qjs_owner_t              *owner;
+#endif
 } ngx_js_opaque_t;
 
 
@@ -359,6 +371,8 @@ void ngx_js_ctx_init(ngx_js_ctx_t *ctx, ngx_log_t *log);
 
 
 void ngx_js_ctx_destroy(ngx_js_ctx_t *ctx);
+ngx_int_t ngx_js_ctx_string(ngx_js_ctx_t *ctx, ngx_pool_t *pool,
+    ngx_str_t *str);
 ngx_int_t ngx_js_call(njs_vm_t *vm, njs_function_t *func,
     njs_opaque_value_t *args, njs_uint_t nargs);
 ngx_int_t ngx_js_log_exception(njs_vm_t *vm, ngx_log_t *log, const char *txt);
@@ -402,6 +416,17 @@ ngx_int_t ngx_qjs_log_exception(ngx_engine_t *e, ngx_log_t *log,
 ngx_int_t ngx_qjs_integer(JSContext *cx, JSValueConst val, ngx_int_t *n);
 ngx_int_t ngx_qjs_string(JSContext *cx, ngx_pool_t *pool, JSValueConst val,
     ngx_str_t *dst);
+ngx_int_t ngx_qjs_bytes_copy(JSContext *cx, ngx_str_t *dst,
+    const ngx_str_t *src);
+ngx_int_t ngx_qjs_value_bytes_copy(JSContext *cx, JSValueConst value,
+    ngx_str_t *str);
+ngx_js_opaque_t *ngx_qjs_opaque_alloc(JSContext *cx, size_t size,
+    void *external, ngx_qjs_owner_t *owner);
+ngx_js_opaque_t *ngx_qjs_opaque_get(JSContext *cx, JSValueConst value,
+    JSClassID class_id);
+void ngx_qjs_owner_release(JSRuntime *rt, ngx_qjs_owner_t *owner);
+void ngx_qjs_opaque_free(JSRuntime *rt, ngx_js_opaque_t *opaque);
+void ngx_qjs_opaque_finalizer(JSRuntime *rt, JSValue value);
 ngx_int_t ngx_qjs_header_value(JSContext *cx, ngx_pool_t *pool,
     JSValueConst val, ngx_str_t *dst);
 
@@ -410,7 +435,7 @@ JSValue ngx_qjs_ext_fetch(JSContext *cx, JSValueConst this_val, int argc,
 
 #define ngx_qjs_prop(cx, type, start, len)                                   \
     ((type == NGX_JS_STRING) ? qjs_string_create(cx, start, len)             \
-                             : qjs_buffer_create(cx, (u_char *) start, len))
+                             : qjs_buffer_copy(cx, (u_char *) start, len))
 
 #define ngx_qjs_meta(cx, i)                                                  \
     ((uintptr_t *) JS_GetRuntimeOpaque(JS_GetRuntime(cx)))[i]

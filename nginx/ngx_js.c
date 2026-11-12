@@ -118,7 +118,7 @@ static void ngx_qjs_rejection_tracker(JSContext *ctx, JSValueConst promise,
     JSValueConst reason, JS_BOOL is_handled, void *opaque);
 
 static JSValue ngx_qjs_value(JSContext *cx, const ngx_str_t *path);
-static ngx_int_t ngx_qjs_dump_obj(ngx_engine_t *e, JSValueConst val,
+static ngx_int_t ngx_qjs_dump_obj(JSContext *cx, JSValueConst val,
     ngx_str_t *dst);
 
 static JSModuleDef *ngx_qjs_core_init(JSContext *cx, const char *name);
@@ -1286,7 +1286,7 @@ static ngx_int_t
 ngx_engine_qjs_string(ngx_engine_t *e, njs_opaque_value_t *value,
     ngx_str_t *str)
 {
-    return ngx_qjs_dump_obj(e, ngx_qjs_arg(*value), str);
+    return ngx_qjs_dump_obj(e->u.qjs.ctx, ngx_qjs_arg(*value), str);
 }
 
 
@@ -1301,6 +1301,10 @@ ngx_qjs_detach_ctx(ngx_js_ctx_t *ctx, JSContext *cx)
         opaque = JS_GetOpaque(ngx_qjs_arg(ctx->args[0]), class_id);
 
         if (opaque != NULL) {
+            if (opaque->owner != NULL) {
+                opaque->owner->alive = 0;
+            }
+
             opaque->external = NULL;
         }
     }
@@ -1519,21 +1523,18 @@ ngx_qjs_value(JSContext *cx, const ngx_str_t *path)
 
 
 static ngx_int_t
-ngx_qjs_dump_obj(ngx_engine_t *e, JSValueConst val, ngx_str_t *dst)
+ngx_qjs_dump_obj(JSContext *cx, JSValueConst val, ngx_str_t *dst)
 {
     size_t      len, byte_offset, byte_length;
     u_char     *start, *p;
     JSValue     buffer, stack;
     ngx_str_t   str, stack_str;
-    JSContext  *cx;
 
     if (JS_IsNullOrUndefined(val)) {
         dst->data = NULL;
         dst->len = 0;
         return NGX_OK;
     }
-
-    cx = e->u.qjs.ctx;
 
     buffer = JS_GetTypedArrayBuffer(cx, val, &byte_offset, &byte_length, NULL);
     if (!JS_IsException(buffer)) {
@@ -1545,7 +1546,7 @@ ngx_qjs_dump_obj(ngx_engine_t *e, JSValueConst val, ngx_str_t *dst)
             start += byte_offset;
             dst->len = byte_length;
 
-            dst->data = njs_mp_alloc(e->pool, dst->len);
+            dst->data = js_malloc(cx, njs_max(dst->len, 1));
             if (dst->data == NULL) {
                 return NGX_ERROR;
             }
@@ -1577,9 +1578,10 @@ ngx_qjs_dump_obj(ngx_engine_t *e, JSValueConst val, ngx_str_t *dst)
             len += stack_str.len + njs_length("\n");
         }
 
-        start = njs_mp_alloc(e->pool, len);
+        start = js_malloc(cx, njs_max(len, 1));
         if (start == NULL) {
             JS_FreeCString(cx, (char *) str.data);
+            JS_FreeCString(cx, (char *) stack_str.data);
             JS_FreeValue(cx, stack);
             return NGX_ERROR;
         }
@@ -1598,7 +1600,7 @@ ngx_qjs_dump_obj(ngx_engine_t *e, JSValueConst val, ngx_str_t *dst)
     } else {
         len = njs_length("[exception]");
 
-        start = njs_mp_alloc(e->pool, len);
+        start = js_malloc(cx, len);
         if (start == NULL) {
             return NGX_ERROR;
         }
@@ -1645,17 +1647,21 @@ ngx_qjs_log_exception(ngx_engine_t *e, ngx_log_t *log, const char *txt)
 {
     JSValue    exception;
     ngx_str_t  s;
+    JSContext  *cx;
 
-    exception = JS_GetException(e->u.qjs.ctx);
-    if (ngx_qjs_dump_obj(e, exception, &s) != NGX_OK) {
+    cx = e->u.qjs.ctx;
+    exception = JS_GetException(cx);
+    if (ngx_qjs_dump_obj(cx, exception, &s) != NGX_OK) {
         ngx_log_error(NGX_LOG_ERR, log, 0, "js can't get %s", txt);
+        JS_FreeValue(cx, exception);
 
         return NGX_ERROR;
     }
 
     ngx_log_error(NGX_LOG_ERR, log, 0, "js %s: %V", txt, &s);
 
-    JS_FreeValue(e->u.qjs.ctx, exception);
+    js_free(cx, s.data);
+    JS_FreeValue(cx, exception);
 
     return NGX_OK;
 }
@@ -1694,19 +1700,12 @@ ngx_qjs_string(JSContext *cx, ngx_pool_t *pool, JSValueConst val,
     u_char        *start;
     JSValue        buffer;
     const char    *str;
-    ngx_js_ctx_t  *ctx;
-    ngx_engine_t  *e;
-
-    ctx = ngx_qjs_external_ctx(cx, JS_GetContextOpaque(cx));
-    e = ctx->engine;
 
     if (JS_IsNullOrUndefined(val)) {
         dst->data = NULL;
         dst->len = 0;
         return NGX_OK;
     }
-
-    cx = e->u.qjs.ctx;
 
     if (JS_IsString(val)) {
         goto string;
@@ -1774,6 +1773,166 @@ ngx_qjs_header_value(JSContext *cx, ngx_pool_t *pool, JSValueConst val,
 }
 
 
+ngx_int_t
+ngx_qjs_bytes_copy(JSContext *cx, ngx_str_t *dst, const ngx_str_t *src)
+{
+    dst->data = js_malloc(cx, njs_max(src->len, 1));
+    if (dst->data == NULL) {
+        return NGX_ERROR;
+    }
+
+    dst->len = src->len;
+
+    if (src->len != 0) {
+        ngx_memcpy(dst->data, src->data, src->len);
+    }
+
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_qjs_value_bytes_copy(JSContext *cx, JSValueConst value, ngx_str_t *str)
+{
+    size_t       offset, length;
+    JSValue      buffer;
+    ngx_int_t    rc;
+    ngx_str_t    source;
+    const char  *p;
+
+    if (JS_IsNullOrUndefined(value)) {
+        ngx_str_null(&source);
+
+        return ngx_qjs_bytes_copy(cx, str, &source);
+    }
+
+    if (!JS_IsString(value)) {
+        buffer = JS_GetTypedArrayBuffer(cx, value, &offset, &length, NULL);
+        if (!JS_IsException(buffer)) {
+            source.data = JS_GetArrayBuffer(cx, &source.len, buffer);
+            if (source.data != NULL) {
+                source.data += offset;
+                source.len = length;
+                rc = ngx_qjs_bytes_copy(cx, str, &source);
+                JS_FreeValue(cx, buffer);
+
+                return rc;
+            }
+
+            JS_FreeValue(cx, buffer);
+        }
+    }
+
+    p = JS_ToCStringLen(cx, &source.len, value);
+    if (p == NULL) {
+        return NGX_ERROR;
+    }
+
+    source.data = (u_char *) p;
+    rc = ngx_qjs_bytes_copy(cx, str, &source);
+    JS_FreeCString(cx, p);
+
+    return rc;
+}
+
+
+ngx_js_opaque_t *
+ngx_qjs_opaque_alloc(JSContext *cx, size_t size, void *external,
+    ngx_qjs_owner_t *owner)
+{
+    ngx_js_opaque_t  *opaque;
+
+    if (owner != NULL && owner->runtime != JS_GetRuntime(cx)) {
+        JS_ThrowTypeError(cx, "native object belongs to a different runtime");
+        return NULL;
+    }
+
+    opaque = js_malloc(cx, size);
+    if (opaque == NULL) {
+        return NULL;
+    }
+
+    if (owner == NULL) {
+        owner = js_mallocz(cx, sizeof(ngx_qjs_owner_t));
+        if (owner == NULL) {
+            js_free(cx, opaque);
+            return NULL;
+        }
+
+        owner->alive = 1;
+        owner->runtime = JS_GetRuntime(cx);
+    }
+
+    owner->references++;
+    opaque->external = external;
+    opaque->owner = owner;
+
+    return opaque;
+}
+
+
+ngx_js_opaque_t *
+ngx_qjs_opaque_get(JSContext *cx, JSValueConst value, JSClassID class_id)
+{
+    ngx_js_opaque_t  *opaque;
+
+    opaque = JS_GetOpaque2(cx, value, class_id);
+    if (opaque == NULL) {
+        return NULL;
+    }
+
+    if (opaque->owner != NULL
+        && opaque->owner->runtime != JS_GetRuntime(cx))
+    {
+        JS_ThrowTypeError(cx, "native object belongs to a different runtime");
+        return NULL;
+    }
+
+    if (opaque->external == NULL
+        || (opaque->owner != NULL && !opaque->owner->alive))
+    {
+        JS_ThrowTypeError(cx, "native object is no longer valid");
+        return NULL;
+    }
+
+    return opaque;
+}
+
+
+void
+ngx_qjs_owner_release(JSRuntime *rt, ngx_qjs_owner_t *owner)
+{
+    if (owner != NULL) {
+        njs_assert(owner->runtime == rt);
+        njs_assert(owner->references != 0);
+
+        if (--owner->references == 0) {
+            js_free_rt(rt, owner);
+        }
+    }
+}
+
+
+void
+ngx_qjs_opaque_free(JSRuntime *rt, ngx_js_opaque_t *opaque)
+{
+    ngx_qjs_owner_release(rt, opaque->owner);
+    js_free_rt(rt, opaque);
+}
+
+
+void
+ngx_qjs_opaque_finalizer(JSRuntime *rt, JSValue value)
+{
+    ngx_js_opaque_t  *opaque;
+
+    opaque = JS_GetOpaque(value, JS_GetClassID(value));
+    if (opaque != NULL) {
+        ngx_qjs_opaque_free(rt, opaque);
+    }
+}
+
+
 static void
 ngx_qjs_timer_handler(ngx_event_t *ev)
 {
@@ -1837,6 +1996,13 @@ ngx_qjs_ext_set_timeout(JSContext *cx, JSValueConst this_val, int argc,
     ngx_qjs_event_t   *event;
     ngx_connection_t  *c;
 
+    external = JS_GetContextOpaque(cx);
+    ctx = ngx_qjs_external_ctx(cx, external);
+    if (ctx->engine == NULL) {
+        return JS_ThrowTypeError(cx, "async operations are not allowed "
+                                    "during module initialization");
+    }
+
     if (!JS_IsFunction(cx, argv[0])) {
         return JS_ThrowTypeError(cx, "first arg must be a function");
     }
@@ -1851,9 +2017,6 @@ ngx_qjs_ext_set_timeout(JSContext *cx, JSValueConst this_val, int argc,
 
     n = immediate ? 1 : 2;
     argc = (argc >= n) ? argc - n : 0;
-    external = JS_GetContextOpaque(cx);
-    ctx = ngx_qjs_external_ctx(cx, external);
-
     event = ngx_pcalloc(ngx_qjs_external_pool(cx, external),
                         sizeof(ngx_qjs_event_t) + sizeof(JSValue) * argc);
     if (event == NULL) {
@@ -1992,6 +2155,11 @@ ngx_qjs_ext_engine_id(JSContext *cx, JSValueConst this_val)
     external = JS_GetContextOpaque(cx);
     ctx = ngx_qjs_external_ctx(cx, external);
 
+    if (ctx->engine == NULL) {
+        return JS_ThrowTypeError(cx, "engine is not available "
+                                    "during module initialization");
+    }
+
     return JS_NewUint32(cx, ctx->engine->id);
 }
 #endif
@@ -2037,7 +2205,6 @@ ngx_qjs_ext_log(JSContext *cx, JSValueConst this_val, int argc,
     char              *p;
     uint32_t           level;
     ngx_str_t          msg;
-    ngx_js_ctx_t      *ctx;
     ngx_connection_t  *c;
 
     p = JS_GetContextOpaque(cx);
@@ -2056,15 +2223,15 @@ ngx_qjs_ext_log(JSContext *cx, JSValueConst this_val, int argc,
         argv++;
     }
 
-    ctx = ngx_qjs_external_ctx(cx, p);
     c = ngx_qjs_external_connection(cx, p);
 
     for ( ; argc > 0; argc--, argv++) {
-        if (ngx_qjs_dump_obj(ctx->engine, argv[0], &msg) != NGX_OK) {
+        if (ngx_qjs_dump_obj(cx, argv[0], &msg) != NGX_OK) {
             return JS_EXCEPTION;
         }
 
         ngx_js_logger(c, level, (u_char *) msg.data, msg.len);
+        js_free(cx, msg.data);
     }
 
     return JS_UNDEFINED;
@@ -2739,6 +2906,48 @@ ngx_js_ctx_destroy(ngx_js_ctx_t *ctx)
 }
 
 
+ngx_int_t
+ngx_js_ctx_string(ngx_js_ctx_t *ctx, ngx_pool_t *pool, ngx_str_t *str)
+{
+    ngx_int_t      rc;
+    ngx_str_t      value;
+    ngx_engine_t  *e;
+
+    e = ctx->engine;
+
+    rc = e->string(e, &ctx->retval, &value);
+    if (rc != NGX_OK) {
+        return rc;
+    }
+
+    if (e->type == NGX_ENGINE_NJS) {
+        *str = value;
+        return NGX_OK;
+    }
+
+#if (NJS_HAVE_QUICKJS)
+    str->len = value.len;
+    str->data = NULL;
+
+    if (value.len != 0) {
+        str->data = ngx_pnalloc(pool, value.len);
+        if (str->data == NULL) {
+            rc = NGX_ERROR;
+
+        } else {
+            ngx_memcpy(str->data, value.data, value.len);
+        }
+    }
+
+    js_free(e->u.qjs.ctx, value.data);
+
+    return rc;
+#else
+    return NGX_ERROR;
+#endif
+}
+
+
 static njs_int_t
 ngx_js_core_init(njs_vm_t *vm)
 {
@@ -2966,6 +3175,12 @@ ngx_js_ext_engine_id(njs_vm_t *vm, njs_object_prop_t *prop, uint32_t unused,
     ngx_js_ctx_t  *ctx;
 
     ctx = ngx_external_ctx(vm, njs_vm_external_ptr(vm));
+
+    if (ctx->engine == NULL) {
+        njs_vm_type_error(vm, "engine is not available "
+                             "during module initialization");
+        return NJS_ERROR;
+    }
 
     njs_value_number_set(retval, ctx->engine->id);
     return NJS_OK;
@@ -3249,6 +3464,13 @@ njs_set_timer(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     ngx_js_event_t    *event;
     ngx_connection_t  *c;
 
+    ctx = ngx_external_ctx(vm, njs_vm_external_ptr(vm));
+    if (ctx->engine == NULL) {
+        njs_vm_type_error(vm, "async operations are not allowed "
+                             "during module initialization");
+        return NJS_ERROR;
+    }
+
     if (njs_slow_path(nargs < 2)) {
         njs_vm_type_error(vm, "too few arguments");
         return NJS_ERROR;
@@ -3284,7 +3506,6 @@ njs_set_timer(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     event->args = (njs_opaque_value_t *) &event[1];
     event->destructor = ngx_js_clear_timer;
 
-    ctx = ngx_external_ctx(vm, njs_vm_external_ptr(vm));
     event->fd = ctx->event_id++;
 
     c = ngx_external_connection(vm, njs_vm_external_ptr(vm));

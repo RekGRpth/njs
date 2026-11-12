@@ -5277,6 +5277,32 @@ static njs_unit_test_t  njs_test[] =
 
     /* Array.toString(). */
 
+    { njs_str("[1, 2].toString('-')"),
+      njs_str("1,2") },
+
+    { njs_str("[1, [2, 3]].toString(0)"),
+      njs_str("1,2,3") },
+
+    { njs_str("[1, 2].toString({toString() {throw 'unexpected'}})"),
+      njs_str("1,2") },
+
+    { njs_str("var a = [1, 2];"
+              "a.join = function() {return [this === a, arguments.length]};"
+              "a.toString('-', 42)"),
+      njs_str("true,0") },
+
+    { njs_str("Array.prototype.toString.call({join: function() {"
+              "return arguments.length}}, '-', 42)"),
+      njs_str("0") },
+
+    { njs_str("new Uint8Array([1, 2]).toString('-')"),
+      njs_str("1,2") },
+
+    { njs_str("var a = new Uint8Array([1, 2]);"
+              "a.join = function() {return [this === a, arguments.length]};"
+              "a.toString('-', 42)"),
+      njs_str("true,0") },
+
     { njs_str("var a = [1,2,3]; a.join = 'NO';"
                  "Object.prototype.toString = function () { return 'A' }; a"),
       njs_str("[object Array]") },
@@ -10612,6 +10638,34 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("'ab]cd'.match(/\\]/)"),
       njs_str("]") },
+
+    { njs_str("'abc'.match(/x/g) === null"),
+      njs_str("true") },
+
+    { njs_str("'abc'.match(/(x)/gi) === null"),
+      njs_str("true") },
+
+    { njs_str("''.match(/x/g) === null"),
+      njs_str("true") },
+
+    { njs_str("'αβγ'.match(/x/g) === null"),
+      njs_str("true") },
+
+    { njs_str("'abc'.match(/x/) === null"),
+      njs_str("true") },
+
+    { njs_str("var re = /x/g; re.lastIndex = 2;"
+              "['abc'.match(re) === null, re.lastIndex]"),
+      njs_str("true,0") },
+
+    { njs_str("JSON.stringify(''.match(/(?:)/g))"),
+      njs_str("[\"\"]") },
+
+    { njs_str("JSON.stringify('abc'.match(/b/g))"),
+      njs_str("[\"b\"]") },
+
+    { njs_str("JSON.stringify('αβα'.match(/α/g))"),
+      njs_str("[\"α\",\"α\"]") },
 
     { njs_str("'abc'.match(/a*/g)"),
       njs_str("a,,,") },
@@ -20767,6 +20821,49 @@ static njs_unit_test_t  njs_test[] =
 
     { njs_str("let x = [123]; x"),
       njs_str("123") },
+
+    { njs_str("function f() {let x = 1; x; return x} f()"),
+      njs_str("1") },
+
+    { njs_str("function f() {const x = 1; x; return x} f()"),
+      njs_str("1") },
+
+    { njs_str("var result; {let x = 1; x; result = x} result"),
+      njs_str("1") },
+
+    { njs_str("function f() {let x; x; return x} f()"),
+      njs_str("undefined") },
+
+    { njs_str("function f() {let x = 1; x; x++; x; return x} f()"),
+      njs_str("2") },
+
+    { njs_str("function f() {let x = 1; {const x = 2; x;} x; return x}"
+              "f()"),
+      njs_str("1") },
+
+    { njs_str("function f() {let x = 1; return () => {x; return x}}"
+              "f()()"),
+      njs_str("1") },
+
+    { njs_str("function f() {let x = 1; if (true) {x;} return x} f()"),
+      njs_str("1") },
+
+    { njs_str("function f() {x; let x = 1} f()"),
+      njs_str("ReferenceError: cannot access variable before initialization") },
+
+    { njs_str("function f() {x; const x = 1} f()"),
+      njs_str("ReferenceError: cannot access variable before initialization") },
+
+    { njs_str("function f() {let x = 1; {x; let x = 2}} f()"),
+      njs_str("ReferenceError: cannot access variable before initialization") },
+
+    { njs_str("function f() {function g() {x;} g(); let x = 1} f()"),
+      njs_str("ReferenceError: cannot access variable before initialization") },
+
+    { njs_str("function f() {var result = 0;"
+              "try {result = 1; x; let x = 2} catch (e) {return result}}"
+              "f()"),
+      njs_str("1") },
 
     { njs_str("let x = () => x; x()"),
       njs_str("[object Function]") },

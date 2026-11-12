@@ -3201,7 +3201,19 @@ ngx_http_js_ext_set_return_value(njs_vm_t *vm, njs_value_t *args,
         return NJS_ERROR;
     }
 
+    if (r != njs_vm_external_ptr(vm)) {
+        njs_vm_type_error(vm, "cannot set return value for another request");
+        return NJS_ERROR;
+    }
+
     ctx = ngx_http_get_module_ctx(r, ngx_http_js_module);
+    if (ctx == NULL || ctx->engine == NULL
+        || ctx->engine->type != NGX_ENGINE_NJS
+        || ctx->engine->u.njs.vm != vm)
+    {
+        njs_vm_type_error(vm, "request belongs to a different context");
+        return NJS_ERROR;
+    }
 
     njs_value_assign(&ctx->retval, njs_arg(args, nargs, 1));
     njs_value_undefined_set(retval);
@@ -3938,6 +3950,11 @@ ngx_http_js_ext_read_request_body(njs_vm_t *vm, njs_value_t *args,
         return NJS_ERROR;
     }
 
+    if (r != njs_vm_external_ptr(vm)) {
+        njs_vm_type_error(vm, "cannot read body of another request");
+        return NJS_ERROR;
+    }
+
     ctx = ngx_http_get_module_ctx(r, ngx_http_js_module);
 
     event = njs_mp_zalloc(njs_vm_memory_pool(vm),
@@ -4046,6 +4063,11 @@ ngx_http_js_ext_read_request_form(njs_vm_t *vm, njs_value_t *args,
                         njs_argument(args, 0));
     if (r == NULL) {
         njs_vm_type_error(vm, "\"this\" is not an external");
+        return NJS_ERROR;
+    }
+
+    if (r != njs_vm_external_ptr(vm)) {
+        njs_vm_type_error(vm, "cannot read body of another request");
         return NJS_ERROR;
     }
 
@@ -5054,6 +5076,8 @@ ngx_http_js_subrequest_done(ngx_http_request_t *r, void *data, ngx_int_t rc)
             return NGX_ERROR;
         }
 
+        ngx_js_ctx_init((ngx_js_ctx_t *) ctx, r->connection->log);
+
         ngx_http_set_ctx(r, ctx, ngx_http_js_module);
     }
 
@@ -5117,10 +5141,16 @@ ngx_http_js_ext_get_parent(njs_vm_t *vm, njs_object_prop_t *prop,
         return NJS_DECLINED;
     }
 
-    ctx = r->parent ? ngx_http_get_module_ctx(r->parent, ngx_http_js_module)
-                    : NULL;
+    if (r->parent == NULL || r->parent != njs_vm_external_ptr(vm)) {
+        njs_value_undefined_set(retval);
+        return NJS_DECLINED;
+    }
 
-    if (ctx == NULL) {
+    ctx = ngx_http_get_module_ctx(r->parent, ngx_http_js_module);
+    if (ctx == NULL || ctx->engine == NULL
+        || ctx->engine->type != NGX_ENGINE_NJS
+        || ctx->engine->u.njs.vm != vm)
+    {
         njs_value_undefined_set(retval);
         return NJS_DECLINED;
     }
@@ -6529,10 +6559,15 @@ ngx_http_qjs_ext_parent(JSContext *cx, JSValueConst this_val)
         return JS_EXCEPTION;
     }
 
-    ctx = r->parent ? ngx_http_get_module_ctx(r->parent, ngx_http_js_module)
-                    : NULL;
+    if (r->parent == NULL || r->parent != JS_GetContextOpaque(cx)) {
+        return JS_UNDEFINED;
+    }
 
-    if (ctx == NULL) {
+    ctx = ngx_http_get_module_ctx(r->parent, ngx_http_js_module);
+    if (ctx == NULL || ctx->engine == NULL
+        || ctx->engine->type != NGX_ENGINE_QJS
+        || ctx->engine->u.qjs.ctx != cx)
+    {
         return JS_UNDEFINED;
     }
 
@@ -6765,6 +6800,11 @@ ngx_http_qjs_ext_read_request_body(JSContext *cx, JSValueConst this_val,
     }
 
     r = req->opaque.external;
+
+    if (r != JS_GetContextOpaque(cx)) {
+        return JS_ThrowTypeError(cx, "cannot read body of another request");
+    }
+
     ctx = ngx_http_get_module_ctx(r, ngx_http_js_module);
 
     if (r->request_body) {
@@ -6920,6 +6960,11 @@ ngx_http_qjs_ext_read_request_form(JSContext *cx, JSValueConst this_val,
     }
 
     r = req->opaque.external;
+
+    if (r != JS_GetContextOpaque(cx)) {
+        return JS_ThrowTypeError(cx, "cannot read body of another request");
+    }
+
     ctx = ngx_http_get_module_ctx(r, ngx_http_js_module);
 
     if (r->request_body) {
@@ -7594,7 +7639,18 @@ ngx_http_qjs_ext_set_return_value(JSContext *cx, JSValueConst this_val,
         return JS_EXCEPTION;
     }
 
+    if (r != JS_GetContextOpaque(cx)) {
+        return JS_ThrowTypeError(cx,
+                                "cannot set return value for another request");
+    }
+
     ctx = ngx_http_get_module_ctx(r, ngx_http_js_module);
+    if (ctx == NULL || ctx->engine == NULL
+        || ctx->engine->type != NGX_ENGINE_QJS
+        || ctx->engine->u.qjs.ctx != cx)
+    {
+        return JS_ThrowTypeError(cx, "request belongs to a different context");
+    }
 
     JS_FreeValue(cx, ngx_qjs_arg(ctx->retval));
     ngx_qjs_arg(ctx->retval) = JS_DupValue(cx, argv[0]);
@@ -7633,6 +7689,8 @@ ngx_http_qjs_subrequest_done(ngx_http_request_t *r, void *data, ngx_int_t rc)
         if (sctx == NULL) {
             return NGX_ERROR;
         }
+
+        ngx_js_ctx_init((ngx_js_ctx_t *) sctx, r->connection->log);
 
         ngx_http_set_ctx(r, sctx, ngx_http_js_module);
 

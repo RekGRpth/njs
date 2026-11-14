@@ -1853,6 +1853,12 @@ ngx_http_js_internal_redirect(ngx_http_request_t *r, ngx_http_js_ctx_t *ctx)
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
 
+    if (ngx_js_check_no_space_or_ctrl_chars(args.data, args.len) != NGX_OK) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "unsafe URI arguments were detected");
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    }
+
     return ngx_http_internal_redirect(r, &ctx->redirect_uri, &args);
 }
 
@@ -6114,6 +6120,7 @@ ngx_http_qjs_query_string_decode(njs_chb_t *chain, const u_char *start,
 {
     u_char                *dst;
     uint32_t               cp;
+    njs_bool_t             consumed;
     const u_char          *p, *end;
     njs_unicode_decode_t   ctx;
 
@@ -6147,13 +6154,18 @@ ngx_http_qjs_query_string_decode(njs_chb_t *chain, const u_char *start,
 
     while (p < end) {
         if (*p == '%' && end - p > 2 && hex[p[1]] >= 0 && hex[p[2]] >= 0) {
-            cp = njs_utf8_consume(&ctx, (hex[p[1]] << 4) | hex[p[2]]);
-            p += 3;
+            cp = njs_utf8_consume(&ctx, (hex[p[1]] << 4) | hex[p[2]],
+                                  &consumed);
+            if (consumed) {
+                p += 3;
+            }
 
         } else {
             if (*p == '+') {
-                cp = ' ';
-                p++;
+                cp = njs_utf8_consume(&ctx, ' ', &consumed);
+                if (consumed) {
+                    p++;
+                }
 
             } else {
                 cp = njs_utf8_decode(&ctx, &p, end);
@@ -7902,7 +7914,9 @@ ngx_http_qjs_ext_subrequest(JSContext *cx, JSValueConst this_val,
 
     flags = NGX_HTTP_LOG_UNSAFE;
 
-    if (ngx_http_parse_unsafe_uri(r, &uri, &args, &flags) != NGX_OK) {
+    if (ngx_http_parse_unsafe_uri(r, &uri, &args, &flags) != NGX_OK
+        || ngx_js_check_no_space_or_ctrl_chars(args.data, args.len) != NGX_OK)
+    {
         return JS_ThrowTypeError(cx, "unsafe uri");
     }
 
@@ -10421,7 +10435,10 @@ ngx_http_js_parse_unsafe_uri(ngx_http_request_t *r, njs_str_t *uri,
     args_arg.data = args->start;
     args_arg.len = args->length;
 
-    if (ngx_http_parse_unsafe_uri(r, &uri_arg, &args_arg, &flags) != NGX_OK) {
+    if (ngx_http_parse_unsafe_uri(r, &uri_arg, &args_arg, &flags) != NGX_OK
+        || ngx_js_check_no_space_or_ctrl_chars(args_arg.data, args_arg.len)
+           != NGX_OK)
+    {
         return NGX_ERROR;
     }
 

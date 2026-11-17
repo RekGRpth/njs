@@ -34,6 +34,8 @@ typedef struct {
     qjs_encoding_t        encoding;
     int                   fatal;
     int                   ignore_bom;
+    int                   bom_seen;
+    int                   stream;
 
     njs_unicode_decode_t  ctx;
 } qjs_text_decoder_t;
@@ -891,7 +893,7 @@ static JSValue
 qjs_text_decoder_decode(JSContext *cx, JSValueConst this_val, int argc,
     JSValueConst *argv)
 {
-    int                   stream;
+    int                   stream, bom_seen;
     size_t                size;
     u_char                *dst;
     JSValue               ret;
@@ -899,21 +901,16 @@ qjs_text_decoder_decode(JSContext *cx, JSValueConst this_val, int argc,
     njs_str_t             data;
     const u_char          *end;
     qjs_text_decoder_t    *td;
-    njs_unicode_decode_t  ctx;
+    njs_unicode_decode_t  ctx, next;
 
     td = JS_GetOpaque(this_val, QJS_CORE_CLASS_ID_TEXT_DECODER);
     if (td == NULL) {
         return JS_ThrowTypeError(cx, "'this' is not a TextDecoder");
     }
 
-    ret = qjs_typed_array_data(cx, argv[0], &data);
-    if (JS_IsException(ret)) {
-        return ret;
-    }
-
     stream = 0;
 
-    if (argc > 1) {
+    if (argc > 1 && !JS_IsNullOrUndefined(argv[1])) {
         ret = JS_GetPropertyStr(cx, argv[1], "stream");
         if (JS_IsException(ret)) {
             return JS_EXCEPTION;
@@ -923,17 +920,38 @@ qjs_text_decoder_decode(JSContext *cx, JSValueConst this_val, int argc,
         JS_FreeValue(cx, ret);
     }
 
-    ctx = td->ctx;
-    end = data.start + data.length;
+    data.start = NULL;
+    data.length = 0;
 
-    if (data.start != NULL && !td->ignore_bom) {
-        data.start += njs_utf8_bom(data.start, end);
+    if (!JS_IsUndefined(argv[0])) {
+        ret = qjs_typed_array_data(cx, argv[0], &data);
+        if (JS_IsException(ret)) {
+            return ret;
+        }
     }
 
-    length = njs_utf8_stream_length(&ctx, data.start, end - data.start, !stream,
-                                    td->fatal, &size);
+    end = data.start + data.length;
+
+    if (!td->stream) {
+        njs_utf8_decode_init(&td->ctx);
+        td->bom_seen = 0;
+    }
+
+    td->stream = stream;
+    ctx = td->ctx;
+    bom_seen = td->bom_seen;
+
+    if (!td->ignore_bom && !bom_seen) {
+        bom_seen = njs_utf8_bom(&ctx, (const u_char **) &data.start, end);
+    }
+
+    next = ctx;
+
+    length = njs_utf8_stream_length(&next, data.start, end - data.start,
+                                    !stream, td->fatal, &size);
 
     if (length == -1) {
+        td->ctx = next;
         return JS_ThrowTypeError(cx, "The encoded data was not valid");
     }
 
@@ -943,14 +961,17 @@ qjs_text_decoder_decode(JSContext *cx, JSValueConst this_val, int argc,
         return JS_EXCEPTION;
     }
 
-    (void) njs_utf8_stream_encode(&td->ctx, data.start, end, dst, !stream, 0);
+    (void) njs_utf8_stream_encode(&ctx, data.start, end, dst, !stream, 0);
 
     ret = JS_NewStringLen(cx, (const char *) dst, size);
     js_free(cx, dst);
 
-    if (!stream) {
-        njs_utf8_decode_init(&td->ctx);
+    if (JS_IsException(ret)) {
+        return ret;
     }
+
+    td->ctx = ctx;
+    td->bom_seen = bom_seen;
 
     return ret;
 }
@@ -1377,6 +1398,45 @@ qjs_array_buffer_adopt(JSContext *cx, uint8_t *src, size_t len)
 }
 
 
+/*
+ * Library and host failures are reported as Error, since QuickJS-NG makes
+ * InternalError uncatchable by JavaScript code.
+ */
+
+JSValue
+qjs_throw_error(JSContext *cx, const char *fmt, ...)
+{
+    char     buf[256];
+    JSValue  error, message;
+    va_list  args;
+
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    error = qjs_new_error(cx);
+    if (JS_IsException(error)) {
+        return JS_EXCEPTION;
+    }
+
+    message = JS_NewString(cx, buf);
+    if (JS_IsException(message)) {
+        JS_FreeValue(cx, error);
+        return JS_EXCEPTION;
+    }
+
+    if (JS_DefinePropertyValueStr(cx, error, "message", message,
+                                  JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE)
+        < 0)
+    {
+        JS_FreeValue(cx, error);
+        return JS_EXCEPTION;
+    }
+
+    return JS_Throw(cx, error);
+}
+
+
 JSValue
 qjs_string_create_chb(JSContext *cx, njs_chb_t *chain)
 {
@@ -1391,7 +1451,7 @@ qjs_string_create_chb(JSContext *cx, njs_chb_t *chain)
             val = JS_ThrowRangeError(cx, "invalid string length");
 
         } else {
-            val = JS_ThrowInternalError(cx, "failed to create string");
+            val = qjs_throw_error(cx, "failed to create string");
         }
 
         njs_chb_destroy(chain);

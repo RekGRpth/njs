@@ -38,7 +38,7 @@ http {
     js_context_reuse 1;
     js_import test.js;
     js_var $test_value original;
-    js_shared_dict_zone zone=scopes:32k;
+    js_shared_dict_zone zone=scopes:512k;
 
     server {
         listen       127.0.0.1:8080;
@@ -174,10 +174,15 @@ $t->write_file('test.js', <<'EOF');
     export default {engine, periodic, forced, results};
 EOF
 
-$t->try_run('no njs available');
+$t->run();
+
+my ($headers, $engine) = split(/\x0d\x0a\x0d\x0a/, http_get('/engine') // '', 2);
+die "failed to determine js_engine\n"
+    unless defined $engine && $headers =~ /\AHTTP\/1\.[01] 200 /
+    && $engine =~ /\A(?:njs|QuickJS)\z/;
 
 plan(skip_all => 'QuickJS-specific lifetime tests')
-    if http_get('/engine') =~ /njs$/m;
+    if $engine ne 'QuickJS';
 
 $t->plan(3);
 

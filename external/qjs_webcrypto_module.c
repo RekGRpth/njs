@@ -141,6 +141,8 @@ static JSValue qjs_cipher_aes_cbc(JSContext *cx, njs_str_t *data,
 static JSValue qjs_cipher_aes_kw(JSContext *cx, njs_str_t *data,
     qjs_webcrypto_key_t *key, int encrypt);
 #endif
+static int qjs_derive_key_length(JSContext *cx,
+    qjs_webcrypto_algorithm_t *dalg, int64_t length);
 static JSValue qjs_derive_ecdh(JSContext *cx, JSValueConst *argv, int argc,
     int derive_key, qjs_webcrypto_key_t *key);
 static JSValue qjs_webcrypto_derive(JSContext *cx, JSValueConst this_val,
@@ -2069,6 +2071,41 @@ qjs_export_raw_ec(JSContext *cx, qjs_webcrypto_key_t *key)
 }
 
 
+static int
+qjs_derive_key_length(JSContext *cx, qjs_webcrypto_algorithm_t *dalg,
+    int64_t length)
+{
+    switch (dalg->type) {
+    case QJS_ALGORITHM_AES_GCM:
+    case QJS_ALGORITHM_AES_CTR:
+    case QJS_ALGORITHM_AES_CBC:
+    case QJS_ALGORITHM_AES_KW:
+        if (length != 128 && length != 192 && length != 256) {
+            JS_ThrowTypeError(cx, "deriveKey \"%s\" length must be "
+                              "128, 192, or 256",
+                              qjs_algorithm_string(dalg));
+            return -1;
+        }
+
+        break;
+
+    case QJS_ALGORITHM_HMAC:
+        if (length < 8) {
+            JS_ThrowTypeError(cx, "deriveKey \"HMAC\" length must be "
+                              "at least 8");
+            return -1;
+        }
+
+        break;
+
+    default:
+        break;
+    }
+
+    return 0;
+}
+
+
 static JSValue
 qjs_derive_ecdh(JSContext *cx, JSValueConst *argv, int argc, int derive_key,
     qjs_webcrypto_key_t *key)
@@ -2090,6 +2127,12 @@ qjs_derive_ecdh(JSContext *cx, JSValueConst *argv, int argc, int derive_key,
     if (derive_key) {
         dalg = qjs_key_algorithm(cx, dobject);
         if (dalg == NULL) {
+            goto fail;
+        }
+
+        if (!dalg->raw) {
+            JS_ThrowTypeError(cx, "not implemented deriveKey: \"%s\"",
+                              qjs_algorithm_string(dalg));
             goto fail;
         }
 
@@ -2115,6 +2158,10 @@ qjs_derive_ecdh(JSContext *cx, JSValueConst *argv, int argc, int derive_key,
     }
 
     JS_FreeValue(cx, value);
+
+    if (derive_key && qjs_derive_key_length(cx, dalg, length) < 0) {
+        goto fail;
+    }
 
     dkey = NULL;
     length /= 8;
@@ -2345,26 +2392,12 @@ qjs_webcrypto_derive(JSContext *cx, JSValueConst this_val, int argc,
 
     JS_FreeValue(cx, ret);
 
-    dkey = NULL;
-    length /= 8;
-    dkey_value = JS_UNDEFINED;
-
     if (derive_key) {
         switch (dalg->type) {
         case QJS_ALGORITHM_AES_GCM:
         case QJS_ALGORITHM_AES_CTR:
         case QJS_ALGORITHM_AES_CBC:
         case QJS_ALGORITHM_AES_KW:
-
-            if (length != 16 && length != 24 && length != 32) {
-                JS_ThrowTypeError(cx, "deriveKey \"%s\" length must be "
-                                  "128, 192, or 256",
-                                  qjs_algorithm_string(dalg));
-                return JS_EXCEPTION;
-            }
-
-            break;
-
         case QJS_ALGORITHM_HMAC:
             break;
 
@@ -2374,6 +2407,16 @@ qjs_webcrypto_derive(JSContext *cx, JSValueConst this_val, int argc,
             return JS_EXCEPTION;
         }
 
+        if (qjs_derive_key_length(cx, dalg, length) < 0) {
+            return JS_EXCEPTION;
+        }
+    }
+
+    dkey = NULL;
+    length /= 8;
+    dkey_value = JS_UNDEFINED;
+
+    if (derive_key) {
         ret = qjs_key_usage(cx, argv[4], &usage);
         if (JS_IsException(ret)) {
             return JS_EXCEPTION;
@@ -2642,6 +2685,18 @@ qjs_webcrypto_export_key_raw(JSContext *cx, qjs_webcrypto_key_t *key,
     JSValue              ret;
     PKCS8_PRIV_KEY_INFO  *pkcs8;
 
+    if (!(fmt & key->alg->fmt)) {
+        JS_ThrowTypeError(cx, "unsupported key fmt \"%s\" for \"%s\" key",
+                          qjs_format_string(fmt),
+                          qjs_algorithm_string(key->alg));
+        return JS_EXCEPTION;
+    }
+
+    if (!key->extractable) {
+        JS_ThrowTypeError(cx, "provided key cannot be extracted");
+        return JS_EXCEPTION;
+    }
+
     switch (fmt) {
     case QJS_KEY_FORMAT_JWK:
         switch (key->alg->type) {
@@ -2817,18 +2872,6 @@ qjs_webcrypto_export_key(JSContext *cx, JSValueConst this_val, int argc,
     key = JS_GetOpaque2(cx, argv[1], QJS_CORE_CLASS_ID_WEBCRYPTO_KEY);
     if (key == NULL) {
         JS_ThrowTypeError(cx, "\"key\" is not a CryptoKey object");
-        return JS_EXCEPTION;
-    }
-
-    if (!(fmt & key->alg->fmt)) {
-        JS_ThrowTypeError(cx, "unsupported key fmt \"%s\" for \"%s\" key",
-                          qjs_format_string(fmt),
-                          qjs_algorithm_string(key->alg));
-        return JS_EXCEPTION;
-    }
-
-    if (!key->extractable) {
-        JS_ThrowTypeError(cx, "provided key cannot be extracted");
         return JS_EXCEPTION;
     }
 
@@ -3924,7 +3967,12 @@ qjs_import_jwk_oct(JSContext *cx, JSValue jwk, qjs_webcrypto_key_t *key)
     };
 
     val = JS_GetPropertyStr(cx, jwk, "k");
-    if (JS_IsException(val) || !JS_IsString(val)) {
+    if (JS_IsException(val)) {
+        return JS_EXCEPTION;
+    }
+
+    if (!JS_IsString(val)) {
+        JS_FreeValue(cx, val);
         JS_ThrowTypeError(cx, "Invalid JWK oct key");
         return JS_EXCEPTION;
     }
@@ -5467,6 +5515,8 @@ qjs_webcrypto_key_algorithm(JSContext *cx, JSValueConst this_val)
 
     case QJS_ALGORITHM_ED25519:
     case QJS_ALGORITHM_X25519:
+    case QJS_ALGORITHM_PBKDF2:
+    case QJS_ALGORITHM_HKDF:
         break;
 
     case QJS_ALGORITHM_HMAC:

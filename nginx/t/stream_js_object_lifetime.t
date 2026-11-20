@@ -41,7 +41,7 @@ stream {
     js_var $test_value original;
     js_var $result;
     js_set $engine test.engine;
-    js_shared_dict_zone zone=scopes:32k;
+    js_shared_dict_zone zone=scopes:512k;
 
     server {
         listen      127.0.0.1:8081;
@@ -178,9 +178,14 @@ my @cases = qw/variables variables_set variables_define raw_variables
 my $periodic = !defined $ENV{NJS_LIFETIME_CASE}
                || $ENV{NJS_LIFETIME_CASE} eq 'periodic';
 
-$t->try_run('no stream njs available');
+$t->run();
+
+my $engine = stream('127.0.0.1:' . port(8082))->read();
+die "failed to determine stream js_engine\n"
+    unless defined $engine && $engine =~ /\A(?:njs|QuickJS)\z/;
+
 plan(skip_all => 'QuickJS-specific lifetime tests')
-    if stream('127.0.0.1:' . port(8082))->read() =~ /njs$/;
+    if $engine ne 'QuickJS';
 $t->plan(2 * @cases + ($periodic ? 1 : 0));
 
 ###############################################################################
